@@ -76,7 +76,11 @@ router.get('/profile/:address', async (req, res) => {
     const statsResult = await pool.query(
       `SELECT 
         COUNT(DISTINCT m.match_id) as total_matches,
-        COUNT(DISTINCT CASE WHEN m.p1_score > COALESCE(m.p2_score, 0) AND m.p1_address = $1 THEN m.match_id END) as wins,
+        COUNT(DISTINCT CASE
+          WHEN m.mode IN ('versus', 'multiplayer')
+           AND m.p1_score > COALESCE(m.p2_score, 0)
+           AND m.p1_address = $1
+          THEN m.match_id END) as wins,
         COALESCE(MAX(m.p1_score), 0) as best_score,
         COUNT(DISTINCT s.token_id) as ships_owned
        FROM users u
