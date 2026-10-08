@@ -5,10 +5,13 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol};
 use stellar_access::ownable::{self as ownable, Ownable};
-use stellar_macros::default_impl;
+use stellar_macros::{default_impl, only_owner};
 use stellar_tokens::non_fungible::{Base, NonFungibleToken};
+
+/// Storage key prefix for a PFP token's metadata URI.
+const PFP_URI: Symbol = soroban_sdk::symbol_short!("PFP_URI");
 
 #[contract]
 pub struct SpaceStellarPFP;
@@ -34,7 +37,7 @@ impl SpaceStellarPFP {
     pub fn mint(e: &Env, to: Address) -> u32 {
         // Check if address already has a PFP
         let balance = Base::balance(e, &to);
-        
+
         if balance > 0 {
             panic!("Address already owns a PFP NFT");
         }
@@ -48,6 +51,26 @@ impl SpaceStellarPFP {
     /// Check if address already has a PFP
     pub fn has_pfp(e: &Env, owner: Address) -> bool {
         Base::balance(e, &owner) > 0
+    }
+
+    /// Update the metadata URI stored for an already-minted PFP.
+    ///
+    /// Only the contract owner may call this function; the authorization is
+    /// enforced through `#[only_owner]`.
+    #[only_owner]
+    pub fn update_metadata(e: &Env, token_id: u32, metadata_uri: String) {
+        // Ensure the token exists (this panics for an unknown token).
+        let _owner = Base::owner_of(e, token_id);
+        e.storage()
+            .persistent()
+            .set(&(PFP_URI, &token_id), &metadata_uri);
+    }
+
+    /// Get the metadata URI stored for a PFP token.
+    ///
+    /// Returns `None` when no metadata URI has been set for the token.
+    pub fn get_pfp(e: &Env, token_id: u32) -> Option<String> {
+        e.storage().persistent().get(&(PFP_URI, &token_id))
     }
 }
 
@@ -63,3 +86,5 @@ impl NonFungibleToken for SpaceStellarPFP {
 #[contractimpl]
 impl Ownable for SpaceStellarPFP {}
 
+#[cfg(test)]
+mod test;
