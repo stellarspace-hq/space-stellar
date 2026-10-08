@@ -1,0 +1,13 @@
+{
+  "_comment": "Illustrative references that are not expected to exist in a fresh checkout: build artifacts live under the gitignored target/ tree, and the .env files are created by the reader in Step 5 of the installation guide.",
+  "files": [
+    "README.md",
+    "contracts/README.md"
+  ],
+  "paths": [
+    "target/**",
+    "contracts/target/**",
+    "**/.env"
+  ],
+  "npmScripts": []
+}
