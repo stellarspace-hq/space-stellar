@@ -4,6 +4,7 @@ import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
 import SuccessModal from '../components/SuccessModal'
+import { notifyPointsChanged } from '../utils/pointsEvents'
 import './Store.css'
 
 interface ShipTemplate {
@@ -236,6 +237,10 @@ const Store = () => {
           } else {
             console.log('✅ Points deducted successfully')
             console.log(`   Remaining points: ${deductResult.points}`)
+            // Update the navbar badge immediately instead of waiting for its poll.
+            if (typeof deductResult.points === 'number') {
+              notifyPointsChanged({ address, points: deductResult.points })
+            }
           }
         } catch (pointsError: any) {
           // NFT sudah di-mint, tapi points gagal dipotong
@@ -415,5 +420,3 @@ const Store = () => {
 }
 
 export default Store
-
-
