@@ -4,6 +4,15 @@ import { randomUUID } from 'crypto';
 
 const router = express.Router();
 
+// Parse a `limit` query value into a positive integer clamped to `max`.
+// Returns null for a non-numeric, zero or negative value so the caller can 400.
+const parseLimit = (raw, defaultValue, max) => {
+  if (raw === undefined) return defaultValue;
+  const str = String(Array.isArray(raw) ? raw[0] : raw).trim();
+  if (!/^[1-9]\d*$/.test(str)) return null;
+  return Math.min(Number(str), max);
+};
+
 // Submit match result
 router.post('/submit', async (req, res) => {
   try {
@@ -78,7 +87,13 @@ router.post('/submit', async (req, res) => {
 // Get leaderboard
 router.get('/leaderboard', async (req, res) => {
   try {
-    const { limit = 100 } = req.query;
+    const limit = parseLimit(req.query.limit, 100, 100);
+    if (limit === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid limit: must be a positive integer'
+      });
+    }
 
     const result = await pool.query(
       `SELECT 
@@ -104,7 +119,13 @@ router.get('/leaderboard', async (req, res) => {
 router.get('/history/:address', async (req, res) => {
   try {
     const { address } = req.params;
-    const { limit = 50 } = req.query;
+    const limit = parseLimit(req.query.limit, 50, 200);
+    if (limit === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid limit: must be a positive integer'
+      });
+    }
 
     // Query ALL matches for user (all scores, not just best score)
     // Remove duplicates by match_id only
