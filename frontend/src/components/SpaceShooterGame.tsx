@@ -2059,129 +2059,104 @@ const SpaceShooterGame = ({
     }
   }, [gameOver, roomCode])
 
-  // REST API polling untuk multiplayer (FALLBACK - lebih reliable)
-  // Sync: position, health, bullets, ship images
+  // Multiplayer sync: Socket.IO is the primary channel. A bounded-rate HTTP
+  // poll is kept only while the socket is disconnected.
   useEffect(() => {
-    if (!isMultiplayer || !roomCode || !address) {
+    if (!isMultiplayer || !roomCode || !address || gameOver) {
       return
     }
-    
-    console.log('🔌 Starting REST API multiplayer sync...', { roomCode, address, isHost })
-    
-    // Poll other players' data (position, health, bullets, ship)
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await axios.get(
-          `${API_URL}/api/multiplayer/get-players/${roomCode}/${address}`
-        )
-        
-        if (response.data.success && response.data.players) {
-          response.data.players.forEach((player: any) => {
-            if (player.address === roomData?.hostAddress && !isHost) {
-              // Guest melihat host data
-              if (player.x !== undefined && player.y !== undefined) {
-                playerRef.current.x = player.x
-                playerRef.current.y = player.y
-              }
-              if (player.health !== undefined) {
-                playerHealthRef.current = player.health
-              }
-              if (player.score !== undefined) {
-                scoreRef.current = player.score
-                setScore(player.score)
-              }
-              if (player.coins !== undefined) {
-                coinsCollectedRef.current = player.coins
-                setCoins(player.coins)
-              }
-              if (player.bullets && Array.isArray(player.bullets)) {
-                // Merge bullets dari player lain (filter bullets yang sudah ada)
-                const existingBulletIds = new Set(bulletsRef.current.map(b => b.id))
-                const newBullets = player.bullets
-                  .filter((b: any) => !existingBulletIds.has(b.id))
-                  .map((b: any) => ({
-                    id: b.id,
-                    x: b.x,
-                    y: b.y,
-                    width: 10,
-                    height: 20,
-                    speed: 12,
-                    damage: shipStats.attack,
-                    playerId: 'host'
-                  }))
-                bulletsRef.current.push(...newBullets)
-              }
-              // Update ship image dari player lain (host)
-              if (player.shipImage && player.shipImage !== shipImageRef.current?.src) {
-                const img = new Image()
-                img.src = player.shipImage
-                img.onload = () => {
-                  shipImageRef.current = img
-                  console.log('✅ Updated Player 1 (host) ship image from sync:', player.shipImage)
-                }
-                img.onerror = () => {
-                  console.warn('⚠️ Failed to load Player 1 ship image from sync:', player.shipImage)
-                }
-              }
-            } else if (player.address === roomData?.guestAddress && isHost) {
-              // Host melihat guest data
-              if (player.x !== undefined && player.y !== undefined) {
-                player2Ref.current.x = player.x
-                player2Ref.current.y = player.y
-              }
-              if (player.health !== undefined) {
-                player2HealthRef.current = player.health
-              }
-              if (player.score !== undefined) {
-                player2ScoreRef.current = player.score
-              }
-              if (player.coins !== undefined) {
-                player2CoinsRef.current = player.coins
-              }
-              if (player.bullets && Array.isArray(player.bullets)) {
-                // Merge bullets dari player lain
-                const existingBulletIds = new Set(bulletsRef.current.map(b => b.id))
-                const newBullets = player.bullets
-                  .filter((b: any) => !existingBulletIds.has(b.id))
-                  .map((b: any) => ({
-                    id: b.id,
-                    x: b.x,
-                    y: b.y,
-                    width: 10,
-                    height: 20,
-                    speed: 12,
-                    damage: shipStats.attack,
-                    playerId: 'guest'
-                  }))
-                bulletsRef.current.push(...newBullets)
-              }
-              // Update ship image dari player lain (guest)
-              if (player.shipImage && player.shipImage !== player2ShipImageRef.current?.src) {
-                const img = new Image()
-                img.src = player.shipImage
-                img.onload = () => {
-                  player2ShipImageRef.current = img
-                  console.log('✅ Updated Player 2 (guest) ship image from sync:', player.shipImage)
-                }
-                img.onerror = () => {
-                  console.warn('⚠️ Failed to load Player 2 ship image from sync:', player.shipImage)
-                }
-              }
-            }
-          })
+
+    const socket = socketRef.current ?? getSocket()
+
+    const applyRemotePlayer = (player: any) => {
+      if (player.address === roomData?.hostAddress && !isHost) {
+        // Guest sees host data
+        if (player.x !== undefined && player.y !== undefined) {
+          playerRef.current.x = player.x
+          playerRef.current.y = player.y
         }
-      } catch (error) {
-        // Silent error - polling will retry
+        if (player.health !== undefined) {
+          playerHealthRef.current = player.health
+        }
+        if (player.score !== undefined) {
+          scoreRef.current = player.score
+          setScore(player.score)
+        }
+        if (player.coins !== undefined) {
+          coinsCollectedRef.current = player.coins
+          setCoins(player.coins)
+        }
+        if (player.bullets && Array.isArray(player.bullets)) {
+          const existingBulletIds = new Set(bulletsRef.current.map(b => b.id))
+          const newBullets = player.bullets
+            .filter((b: any) => !existingBulletIds.has(b.id))
+            .map((b: any) => ({
+              id: b.id,
+              x: b.x,
+              y: b.y,
+              width: 10,
+              height: 20,
+              speed: 12,
+              damage: shipStats.attack,
+              playerId: 'host'
+            }))
+          bulletsRef.current.push(...newBullets)
+        }
+        // Update the other player's ship image
+        if (player.shipImage && player.shipImage !== shipImageRef.current?.src) {
+          const img = new Image()
+          img.src = player.shipImage
+          img.onload = () => {
+            shipImageRef.current = img
+          }
+        }
+      } else if (player.address === roomData?.guestAddress && isHost) {
+        // Host sees guest data
+        if (player.x !== undefined && player.y !== undefined) {
+          player2Ref.current.x = player.x
+          player2Ref.current.y = player.y
+        }
+        if (player.health !== undefined) {
+          player2HealthRef.current = player.health
+        }
+        if (player.score !== undefined) {
+          player2ScoreRef.current = player.score
+        }
+        if (player.coins !== undefined) {
+          player2CoinsRef.current = player.coins
+        }
+        if (player.bullets && Array.isArray(player.bullets)) {
+          const existingBulletIds = new Set(bulletsRef.current.map(b => b.id))
+          const newBullets = player.bullets
+            .filter((b: any) => !existingBulletIds.has(b.id))
+            .map((b: any) => ({
+              id: b.id,
+              x: b.x,
+              y: b.y,
+              width: 10,
+              height: 20,
+              speed: 12,
+              damage: shipStats.attack,
+              playerId: 'guest'
+            }))
+          bulletsRef.current.push(...newBullets)
+        }
+        if (player.shipImage && player.shipImage !== player2ShipImageRef.current?.src) {
+          const img = new Image()
+          img.src = player.shipImage
+          img.onload = () => {
+            player2ShipImageRef.current = img
+          }
+        }
       }
-    }, 50) // Poll setiap 50ms (~20fps) untuk sync
-    
-    // Send own data (position, health, bullets, ship)
-    const sendInterval = setInterval(async () => {
+    }
+
+    // Build this player's own state payload once per tick.
+    const buildLocalState = () => {
       const isHostPlayer = isHost && address === roomData?.hostAddress
       const isGuestPlayer = !isHost && address === roomData?.guestAddress
-      
-      if (!isHostPlayer && !isGuestPlayer) return
-      
+      if (!isHostPlayer && !isGuestPlayer) return null
+
       let x, y, health, bullets, shipImage, shipRarity, score, coins
       if (isHostPlayer) {
         x = playerRef.current.x
@@ -2189,27 +2164,24 @@ const SpaceShooterGame = ({
         health = playerHealthRef.current
         score = scoreRef.current
         coins = coinsCollectedRef.current
-        // Send only own bullets (filter bullets yang baru dibuat)
         const ownBullets = bulletsRef.current
-          .filter(b => (b as any).playerId === 'host') // Only own bullets
+          .filter(b => (b as any).playerId === 'host')
           .map(b => ({ id: b.id, x: b.x, y: b.y }))
         const bulletsKey = JSON.stringify(ownBullets)
         if (bulletsKey !== lastSentBulletsRef.current.host) {
           bullets = ownBullets
           lastSentBulletsRef.current.host = bulletsKey
         }
-        // PERBAIKAN: Prioritaskan roomData.hostShip untuk sinkronisasi
         shipImage = shipImageRef.current?.src || roomData?.hostShip?.image || shipImage
         shipRarity = roomData?.hostShip?.rarity || shipRarity
-      } else if (isGuestPlayer) {
+      } else {
         x = player2Ref.current.x
         y = player2Ref.current.y
         health = player2HealthRef.current
         score = player2ScoreRef.current
         coins = player2CoinsRef.current
-        // Send only own bullets (filter bullets yang baru dibuat)
         const ownBullets = bulletsRef.current
-          .filter(b => (b as any).playerId === 'guest') // Only own bullets
+          .filter(b => (b as any).playerId === 'guest')
           .map(b => ({ id: b.id, x: b.x, y: b.y }))
         const bulletsKey = JSON.stringify(ownBullets)
         if (bulletsKey !== lastSentBulletsRef.current.guest) {
@@ -2219,31 +2191,51 @@ const SpaceShooterGame = ({
         shipImage = player2ShipImageRef.current?.src || roomData?.guestShip?.image
         shipRarity = roomData?.guestShip?.rarity
       }
-      
-      try {
-        await axios.post(`${API_URL}/api/multiplayer/update-player`, {
-          roomCode,
-          address,
-          x,
-          y,
-          health,
-          bullets,
-          shipImage,
-          shipRarity,
-          score,
-          coins
-        })
-      } catch (error) {
-        // Silent error
-      }
-    }, 50) // Send setiap 50ms
-    
-    return () => {
-      clearInterval(pollInterval)
-      clearInterval(sendInterval)
-      console.log('🔌 Stopped REST API multiplayer sync')
+
+      return { roomCode, address, x, y, health, bullets, shipImage, shipRarity, score, coins }
     }
-  }, [isMultiplayer, roomCode, address, isHost, roomData, shipImage, shipRarity, shipStats.attack])
+
+    // Real-time path: broadcast own state over the existing socket (~20 Hz).
+    const stateInterval = setInterval(() => {
+      if (!socketRef.current?.connected) return
+      const state = buildLocalState()
+      if (state) socketRef.current.emit('player-state', state)
+    }, 50)
+
+    // Fallback path: an HTTP poll 20x slower than the old 50 ms loop, used only
+    // while the socket is disconnected.
+    const fallbackInterval = setInterval(() => {
+      if (socketRef.current?.connected) return
+      const state = buildLocalState()
+      if (state) {
+        axios.post(`${API_URL}/api/multiplayer/update-player`, state).catch(() => {})
+      }
+      axios
+        .get(`${API_URL}/api/multiplayer/get-players/${roomCode}/${address}`)
+        .then(response => {
+          if (response.data.success && response.data.players) {
+            response.data.players.forEach(applyRemotePlayer)
+          }
+        })
+        .catch(() => {
+          // Silent: the fallback retries on the next tick.
+        })
+    }, 1000)
+
+    const handleRemoteState = ({ address: remoteAddress, state }: any) => {
+      if (!state || remoteAddress === address) return
+      applyRemotePlayer({ ...state, address: remoteAddress })
+    }
+
+    socket.on('player-state', handleRemoteState)
+
+    return () => {
+      clearInterval(stateInterval)
+      clearInterval(fallbackInterval)
+      socket.off('player-state', handleRemoteState)
+    }
+  }, [isMultiplayer, roomCode, address, isHost, roomData, shipImage, shipRarity, shipStats.attack, gameOver])
+
   
   // Initialize WebSocket connection untuk multiplayer (OPTIONAL - fallback ke REST)
   useEffect(() => {
