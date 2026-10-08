@@ -231,7 +231,6 @@ VITE_STELLAR_NETWORK=testnet
 VITE_CONTRACT_ID=your_nft_contract_id_here
 VITE_PFP_CONTRACT_ID=your_pfp_contract_id_here
 VITE_API_URL=http://localhost:3001
-VITE_SOCKET_URL=http://localhost:3001
 VITE_TREASURY_ADDRESS=your_treasury_address_here
 ```
 
@@ -241,7 +240,6 @@ PORT=3001
 NODE_ENV=development
 STELLAR_NETWORK=testnet
 SOROBAN_RPC_URL=https://soroban-rpc.testnet.stellar.org
-HORIZON_URL=https://horizon-testnet.stellar.org
 
 # Contract IDs (fill after deployment)
 CONTRACT_ID=your_nft_contract_id
@@ -251,7 +249,6 @@ PFP_CONTRACT_ID=your_pfp_contract_id
 DATABASE_URL=postgresql://user:password@localhost:5432/space_stellar
 
 # JWT Secret
-JWT_SECRET=your_random_jwt_secret_key_here
 
 # IPFS (if using Pinata)
 PINATA_API_KEY=your_pinata_api_key
