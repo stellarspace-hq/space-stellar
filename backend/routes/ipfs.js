@@ -5,6 +5,10 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  buildShipMetadata,
+  validateMetadataRequest,
+} from '../utils/ipfsMetadata.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,56 +139,15 @@ router.post('/upload-image', upload.single('image'), async (req, res) => {
 // Create NFT metadata JSON and upload to IPFS
 router.post('/upload-metadata', async (req, res) => {
   try {
-    const { 
-      name, 
-      description, 
-      image, 
-      imageCid,
-      attributes,
-      tier,
-      class: shipClass,
-      rarity,
-      attack,
-      speed,
-      shield
-    } = req.body;
-    
+    const { name, tier, rarity } = req.body;
+
+    const validation = validateMetadataRequest(req.body);
+    if (!validation.ok) {
+      return res.status(validation.status).json(validation.body);
+    }
+
     // Build metadata according to OpenZeppelin/ERC-721 standard
-    const metadata = {
-      name: name || `Space Stellar Ship #${Date.now()}`,
-      description: description || 'A unique NFT ship for Space Stellar game',
-      image: image || (imageCid ? `ipfs://${imageCid}` : ''),
-      external_url: 'https://space-stellar.app',
-      attributes: attributes || [
-        {
-          trait_type: 'Tier',
-          value: tier || 'Classic'
-        },
-        {
-          trait_type: 'Class',
-          value: shipClass || 'Fighter'
-        },
-        {
-          trait_type: 'Rarity',
-          value: rarity || 'Common'
-        },
-        {
-          trait_type: 'Attack',
-          value: attack || 10,
-          display_type: 'number'
-        },
-        {
-          trait_type: 'Speed',
-          value: speed || 8,
-          display_type: 'number'
-        },
-        {
-          trait_type: 'Shield',
-          value: shield || 12,
-          display_type: 'number'
-        }
-      ]
-    };
+    const metadata = buildShipMetadata(req.body);
 
     const pinataApiKey = process.env.PINATA_API_KEY;
     const pinataSecretKey = process.env.PINATA_SECRET_KEY;
