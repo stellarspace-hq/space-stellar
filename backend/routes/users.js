@@ -1,26 +1,18 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import { generateUserId, resolveNextUserId } from '../utils/userIds.js';
 
 const router = express.Router();
-
-// Generate unique user ID (deprecated - now using sequential numeric ID)
-const generateUserId = () => {
-  return `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-};
 
 // Get next sequential user ID from database
 // ID starts from 243681 and auto-increments
 const getNextUserId = async () => {
   try {
-    // Get the next ID from sequence
-    const result = await pool.query("SELECT nextval('user_id_seq') as next_id");
-    return parseInt(result.rows[0].next_id);
+    return await resolveNextUserId(pool);
   } catch (error) {
-    // If sequence doesn't exist, fallback to max ID + 1
-    console.warn('Sequence not found, using fallback method:', error.message);
-    const result = await pool.query('SELECT COALESCE(MAX(id), 243680) + 1 as next_id FROM users');
-    return parseInt(result.rows[0].next_id);
+    console.warn('Could not resolve next user ID, using fallback:', error.message);
+    return 243681;
   }
 };
 
@@ -62,7 +54,7 @@ router.get('/profile/:address', async (req, res) => {
         `INSERT INTO users (id, address, user_id, points, created_at) 
          VALUES ($1, $2, $3, 2000, NOW()) 
          RETURNING *`,
-        [nextId, address, `USER-${nextId}`]
+        [nextId, address, generateUserId(nextId)]
       );
       user = insertResult.rows[0];
       
