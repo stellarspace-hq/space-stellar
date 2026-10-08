@@ -231,7 +231,7 @@ const Room = () => {
           const shipImage = getShipImage(equippedShip)
           hostShip = {
             rarity: equippedShip,
-            name: getShipName(equippedShip),
+            name: getShipNameFromRarity(equippedShip),
             class: 'Fighter',
             image: shipImage
           }
@@ -268,7 +268,7 @@ const Room = () => {
           const shipImage = getShipImage(equippedShip)
           guestShip = {
             rarity: equippedShip,
-            name: getShipName(equippedShip),
+            name: getShipNameFromRarity(equippedShip),
             class: 'Fighter',
             image: shipImage
           }
@@ -386,7 +386,7 @@ const Room = () => {
       hostAddress: address || '',
       hostShip: {
         rarity: equippedShip,
-        name: getShipName(equippedShip),
+        name: getShipNameFromRarity(equippedShip),
         class: 'Fighter',
         image: shipImage
       },
@@ -437,7 +437,7 @@ const Room = () => {
       // PERBAIKAN: Selalu gunakan ship dari localStorage untuk current user
       const equippedShip = localStorage.getItem(`equipped_ship_${address}`) || 'Classic'
       const shipImage = getShipImage(equippedShip)
-      const shipName = getShipName(equippedShip)
+      const shipName = getShipNameFromRarity(equippedShip)
 
       console.log('📦 Creating room:', { roomCode, mode, address, equippedShip, shipImage, shipName })
 
@@ -465,7 +465,7 @@ const Room = () => {
           const shipImage = getShipImage(equippedShip)
           room.hostShip = {
             rarity: equippedShip,
-            name: getShipName(equippedShip),
+            name: getShipNameFromRarity(equippedShip),
             class: 'Fighter',
             image: shipImage
           }
@@ -616,12 +616,21 @@ const Room = () => {
     return imageMap[normalizedRarity] || '/nft-images/ships/ship-classic.gif'
   }
   
-  // PERBAIKAN: Helper function untuk mendapatkan ship name yang benar
-  const getShipName = (rarity: string) => {
-    // Normalisasi "Common" menjadi "Elite" untuk name yang benar
-    const normalizedRarity = rarity === 'Common' ? 'Elite' : rarity
-    return `${normalizedRarity} Fighter`
+  // Canonical rarity -> display name. Matches the collection/backend table so
+  // the lobby never disagrees with what the player actually owns. Used only as
+  // a fallback when we hold a rarity string but no fetched ship object.
+  const SHIP_NAMES: { [key: string]: string } = {
+    'Classic': 'Classic Fighter',
+    'Common': 'Elite Fighter',
+    'Elite': 'Elite Fighter',
+    'Epic': 'Epic Destroyer',
+    'Legendary': 'Legendary Cruiser',
+    'Master': 'Master Battleship',
+    'Ultra': 'Ultra Command'
   }
+
+  const getShipNameFromRarity = (rarity: string) =>
+    SHIP_NAMES[rarity] || 'Classic Fighter'
 
   const getAvatar = (address: string) => {
     // Generate avatar from address (simple approach)
@@ -694,7 +703,7 @@ const Room = () => {
                         // Current user adalah host, gunakan ship dari localStorage
                         const equippedShip = localStorage.getItem(`equipped_ship_${address}`) || 'Classic'
                         shipImage = getShipImage(equippedShip)
-                        shipName = getShipName(equippedShip)
+                        shipName = getShipNameFromRarity(equippedShip)
                         console.log('✅ Multiplayer lobby (host): Using ship from localStorage:', equippedShip, '→', shipImage)
                       } else if (isMultiplayer && address === roomData.guestAddress) {
                         // Current user adalah guest, gunakan host ship dari roomData (yang sudah benar dari backend)
@@ -797,7 +806,7 @@ const Room = () => {
                           // Current user adalah guest, gunakan ship dari localStorage
                           const equippedShip = localStorage.getItem(`equipped_ship_${address}`) || 'Classic'
                           shipImage = getShipImage(equippedShip)
-                          shipName = getShipName(equippedShip)
+                          shipName = getShipNameFromRarity(equippedShip)
                           console.log('✅ Multiplayer lobby (guest): Using ship from localStorage:', equippedShip, '→', shipImage)
                         }
                         
@@ -857,7 +866,7 @@ const Room = () => {
                       if (!isMultiplayer && address) {
                         const equippedShip = localStorage.getItem(`equipped_ship_${address}`) || 'Classic'
                         shipImage = getShipImage(equippedShip)
-                        shipName = getShipName(equippedShip)
+                        shipName = getShipNameFromRarity(equippedShip)
                         console.log('✅ Solo mode lobby: Using ship from localStorage:', equippedShip, '→', shipImage)
                       }
                       
