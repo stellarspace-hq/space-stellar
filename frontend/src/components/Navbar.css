@@ -85,6 +85,23 @@
   padding: 8px 16px;
 }
 
+.wallet-connect-error {
+  position: absolute;
+  right: 20px;
+  top: calc(100% + 8px);
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px;
+  color: #fff;
+  background: var(--bg-secondary);
+  border: 1px solid #ff6b6b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.wallet-connect-error a {
+  color: var(--accent-green);
+}
+
 /* Points Display - menggunakan tema yang sama */
 .points-display {
   display: flex;

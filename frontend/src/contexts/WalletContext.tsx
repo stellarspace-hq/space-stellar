@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Networks } from '@stellar/stellar-sdk'
 import { 
   StellarWalletsKit,
@@ -16,6 +17,8 @@ interface WalletContextType {
   isConnected: boolean
   signTransaction: (transactionXdr: string) => Promise<string>
   network: 'testnet' | 'mainnet'
+  connectionError: string | null
+  clearConnectionError: () => void
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -41,6 +44,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [address, setAddress] = useState<string | null>(null)
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [isWalletConnected, setIsWalletConnected] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
 
   // Check if wallet is already connected on mount
   // Only check once, don't poll (prevents repeated pop-ups)
@@ -80,6 +84,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const connect = async () => {
+    setConnectionError(null)
     try {
       // Prevent multiple simultaneous connection attempts
       if (isWalletConnected) {
@@ -125,10 +130,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
             if (!errorMsg.includes('User rejected') && 
                 !errorMsg.includes('rejected') && 
                 !errorMsg.includes('denied') &&
-                !errorMsg.includes('closed') &&
-                !errorMsg.includes('Could not establish connection')) {
-              // Don't show alert for connection errors from extensions (they're just warnings)
+                !errorMsg.includes('closed')) {
+              // Keep the failure visible so the user can open the wallet guide.
               console.warn('Wallet connection error (non-critical):', errorMsg)
+              setConnectionError(errorMsg)
             }
           } else {
             console.log('Modal closed by user (no error)')
@@ -142,9 +147,8 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       // Only show alert for critical errors
       if (!errorMsg.includes('User rejected') && 
           !errorMsg.includes('rejected') && 
-          !errorMsg.includes('denied') &&
-          !errorMsg.includes('Could not establish connection')) {
-        alert(`Error connecting wallet: ${errorMsg}\n\nPastikan wallet extension sudah terinstall dan aktif.`)
+          !errorMsg.includes('denied')) {
+        setConnectionError(errorMsg)
       }
     }
   }
@@ -208,6 +212,8 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         isConnected: isWalletConnected,
         signTransaction: signTx,
         network: NETWORK,
+        connectionError,
+        clearConnectionError: () => setConnectionError(null),
       }}
     >
       {children}
@@ -224,7 +230,7 @@ export const useWalletKit = () => {
 }
 
 export const WalletKitButton = () => {
-  const { connect, isConnected, address, disconnect } = useWalletKit()
+  const { connect, isConnected, address, disconnect, connectionError, clearConnectionError } = useWalletKit()
   const [isConnecting, setIsConnecting] = useState(false)
   
   const handleConnect = async () => {
@@ -256,13 +262,21 @@ export const WalletKitButton = () => {
   }
 
   return (
-    <button 
-      onClick={handleConnect} 
-      className="btn"
-      disabled={isConnecting}
-    >
-      {isConnecting ? 'CONNECTING...' : 'CONNECT WALLET'}
-    </button>
+    <div>
+      <button
+        onClick={handleConnect}
+        className="btn"
+        disabled={isConnecting}
+      >
+        {isConnecting ? 'CONNECTING...' : 'CONNECT WALLET'}
+      </button>
+      {connectionError && (
+        <div role="alert" className="wallet-connect-error">
+          <span>{connectionError}</span>
+          {' '}
+          <Link to="/wallet-guide" onClick={clearConnectionError}>Wallet help</Link>
+        </div>
+      )}
+    </div>
   )
 }
-

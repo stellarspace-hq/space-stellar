@@ -15,6 +15,7 @@ import Missions from './pages/Missions'
 import SpecialLaunchEvent from './pages/SpecialLaunchEvent'
 import NewYear2026Event from './pages/NewYear2026Event'
 import SpaceExplorerS1Event from './pages/SpaceExplorerS1Event'
+import WalletGuide from './pages/WalletGuide'
 import './App.css'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           <main className="main-content">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/wallet-guide" element={<WalletGuide />} />
               <Route path="/store" element={<Store />} />
               <Route path="/collection" element={<Collection />} />
               <Route path="/profile" element={<Profile />} />
@@ -48,4 +50,3 @@ function App() {
 }
 
 export default App
-

@@ -72,6 +72,12 @@ const Navbar = () => {
           >
             PROFILE
           </Link>
+          <Link
+            to="/wallet-guide"
+            className={`nav-link ${isActive('/wallet-guide') ? 'active' : ''}`}
+          >
+            WALLET HELP
+          </Link>
         </div>
 
         <div className="navbar-wallet">
@@ -90,4 +96,3 @@ const Navbar = () => {
 }
 
 export default Navbar
-
