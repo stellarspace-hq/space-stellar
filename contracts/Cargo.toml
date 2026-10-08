@@ -1,3 +1,4 @@
+[workspace]
 [package]
 name = "space-stellar-nft"
 version = "0.1.0"

@@ -10,9 +10,9 @@ fn test_constructor() {
     let client = SpaceStellarNFTClient::new(&env, &contract_id);
 
     let owner = Address::generate(&env);
-    
+
     client.__constructor(&owner);
-    
+
     // Test that owner is set using OpenZeppelin's owner function
     let contract_owner = client.owner();
     assert_eq!(contract_owner, owner);
@@ -58,10 +58,10 @@ fn test_mint() {
     // Check custom metadata
     let ship_class = client.get_ship_class(&token_id);
     assert_eq!(ship_class, Some(class));
-    
+
     let ship_rarity = client.get_ship_rarity(&token_id);
     assert_eq!(ship_rarity, Some(rarity));
-    
+
     let ipfs_result = client.get_ipfs_cid(&token_id);
     assert_eq!(ipfs_result, Some(ipfs_cid));
 }
