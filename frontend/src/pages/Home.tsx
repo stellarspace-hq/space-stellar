@@ -6,6 +6,7 @@ import EventMission from '../components/EventMission'
 import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
 import { CONTRACT_ID } from '../contracts/config'
+import { readEquippedTokenId, writeEquippedTokenId } from '../utils/equippedShip'
 import './Home.css'
 
 interface Ship {
@@ -27,15 +28,13 @@ const Home = () => {
   const [ships, setShips] = useState<Ship[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [equippedShip, setEquippedShip] = useState<string | null>(null)
+  // Equipped ship is identified by NFT token id (single source of truth).
+  const [equippedTokenId, setEquippedTokenId] = useState<number | null>(null)
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false)
 
-  // Load equipped ship from localStorage
+  // Load equipped ship token id from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem(`equipped_ship_${address}`)
-    if (saved) {
-      setEquippedShip(saved)
-    }
+    setEquippedTokenId(readEquippedTokenId(address))
   }, [address])
 
   // Load ownership status function
@@ -157,8 +156,8 @@ const Home = () => {
           // - Legendary Cruiser: rarity='Legendary', tier='Legendary'
           // - Master Battleship: rarity='Master', tier='Master'
           // - Ultra Command: rarity='Ultra', tier='Ultra'
-          
-          const isOwned = ownedShips.some((s: any) => {
+          // find() (not some()) so we also capture the owned NFT's token id.
+          const matchedOwnedShip = ownedShips.find((s: any) => {
             // PERBAIKAN: Matching lebih ketat berdasarkan tier untuk menghindari Elite dan Master kebuka semua
             
             // Strategy 1: Match by tokenId (most reliable - exact match)
@@ -217,21 +216,30 @@ const Home = () => {
             
             return false
           })
+
+          const isOwned = Boolean(matchedOwnedShip)
           
           if (isOwned) {
             console.log(`✅ Ship OWNED: ${ship.name} (rarity: ${ship.rarity}, tier: ${ship.tier})`)
           } else {
             console.log(`❌ Ship NOT OWNED: ${ship.name} (rarity: ${ship.rarity}, tier: ${ship.tier})`)
           }
-          
-          return { ...ship, owned: isOwned }
+
+          // Carry the matched NFT's token id onto the display ship so equip
+          // state can be compared by token id (never by rarity/tier).
+          return {
+            ...ship,
+            owned: isOwned,
+            tokenId: matchedOwnedShip?.tokenId ?? ship.tokenId
+          }
         })
         
-        // Set current index to equipped ship if exists
-        if (equippedShip) {
+        // Set current index to equipped ship if exists (compared by token id)
+        if (equippedTokenId !== null) {
           const index = updated.findIndex(s => 
-            s.rarity === equippedShip || 
-            (equippedShip === 'Classic' && s.rarity === 'Classic')
+            s.tokenId !== undefined &&
+            s.tokenId !== null &&
+            Number(s.tokenId) === Number(equippedTokenId)
           )
           if (index >= 0) {
             setCurrentIndex(index)
@@ -245,7 +253,8 @@ const Home = () => {
           name: s.name, 
           owned: s.owned, 
           rarity: s.rarity, 
-          tier: s.tier 
+          tier: s.tier,
+          tokenId: s.tokenId
         })))
         
         return updated
@@ -256,7 +265,7 @@ const Home = () => {
     } finally {
       setLoading(false)
     }
-  }, [address, equippedShip])
+  }, [address, equippedTokenId])
 
   // Initialize all ships (always show all 6 ships)
   useEffect(() => {
@@ -351,14 +360,17 @@ const Home = () => {
       return
     }
     
-    // PERBAIKAN: Langsung equip tanpa pop-up
-    // PERBAIKAN: Gunakan tier jika ada (untuk Elite Fighter, tier='Elite' bukan rarity='Common')
+    // Equip is persisted by NFT token id (single source of truth). Ships that
+    // are matched to an owned NFT carry its token id from loadOwnershipStatus().
     if (address && currentShip) {
-      const shipToEquip = currentShip.tier || currentShip.rarity
-      localStorage.setItem(`equipped_ship_${address}`, shipToEquip)
-      setEquippedShip(shipToEquip)
-      console.log(`✅ ${currentShip.name} equipped successfully (${shipToEquip})`)
-      // Tidak ada alert/pop-up, langsung equip
+      const tokenId = currentShip.tokenId
+      if (tokenId === undefined || tokenId === null) {
+        console.warn(`⚠️ Cannot equip ${currentShip.name}: no token id available yet`)
+        return
+      }
+      writeEquippedTokenId(address, Number(tokenId), currentShip.tier || currentShip.rarity)
+      setEquippedTokenId(Number(tokenId))
+      console.log(`✅ ${currentShip.name} equipped successfully (tokenId: ${tokenId})`)
     }
   }
 
@@ -482,7 +494,11 @@ const Home = () => {
     }
   }
 
-  const isEquipped = equippedShip === currentShip?.rarity
+  const isEquipped =
+    equippedTokenId !== null &&
+    currentShip?.tokenId !== undefined &&
+    currentShip?.tokenId !== null &&
+    Number(equippedTokenId) === Number(currentShip.tokenId)
 
   return (
     <div className="home">
