@@ -50,7 +50,22 @@ export const runMigrations = async () => {
         `);
         console.log('✅ Points column added');
       }
-      
+
+      // issue #94: drop the placeholder seed/checksum columns if present.
+      const matchesCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'matches'
+        );
+      `);
+      if (matchesCheck.rows[0].exists) {
+        await pool.query(`
+          ALTER TABLE matches DROP COLUMN IF EXISTS seed;
+          ALTER TABLE matches DROP COLUMN IF EXISTS checksum;
+        `);
+      }
+
       return;
     }
 
@@ -152,8 +167,6 @@ export const runMigrations = async () => {
         p1_score INT NOT NULL,
         p2_score INT,
         duration_ms INT NOT NULL DEFAULT 0,
-        seed BIGINT NOT NULL DEFAULT 0,
-        checksum TEXT NOT NULL DEFAULT '',
         room_code TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );

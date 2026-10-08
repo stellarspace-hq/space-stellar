@@ -126,8 +126,6 @@ const migrate = async () => {
         p1_score INT NOT NULL,
         p2_score INT,
         duration_ms INT NOT NULL DEFAULT 0,
-        seed BIGINT NOT NULL DEFAULT 0,
-        checksum TEXT NOT NULL DEFAULT '',
         room_code TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -162,6 +160,13 @@ const migrate = async () => {
           ALTER TABLE matches ADD COLUMN p2_ship_rarity TEXT;
         END IF;
       END $$;
+    `);
+
+    // issue #94: seed/checksum only ever stored placeholders and nothing read
+    // them, so drop them (idempotent for existing databases).
+    await pool.query(`
+      ALTER TABLE matches DROP COLUMN IF EXISTS seed;
+      ALTER TABLE matches DROP COLUMN IF EXISTS checksum;
     `);
 
     // Create leaderboard table

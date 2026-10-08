@@ -15,9 +15,7 @@ router.post('/submit', async (req, res) => {
       p2ShipTokenId,
       p1Score, 
       p2Score, 
-      durationMs, 
-      seed, 
-      checksum 
+      durationMs 
     } = req.body;
 
     if (!p1Address || !p1Score || !mode) {
@@ -34,13 +32,13 @@ router.post('/submit', async (req, res) => {
       `INSERT INTO matches (
         match_id, mode, p1_address, p2_address, 
         p1_ship_token_id, p2_ship_token_id,
-        p1_score, p2_score, duration_ms, seed, checksum, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        p1_score, p2_score, duration_ms, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
       RETURNING *`,
       [
         matchId, mode, p1Address, p2Address || null,
         p1ShipTokenId || null, p2ShipTokenId || null,
-        p1Score, p2Score || null, durationMs || 0, seed || 0, checksum || ''
+        p1Score, p2Score || null, durationMs || 0
       ]
     );
 
@@ -351,24 +349,19 @@ router.post('/save', async (req, res) => {
 
       console.log('🔄 Step 3: Inserting match...');
       const matchId = randomUUID();
-      // Generate seed for match (required field)
-      const seed = Math.floor(Math.random() * 1000000);
-      // Generate checksum for match (required field) - empty string for now
-      const checksum = '';
 
       // Insert match (simplified for solo play)
       // Store ship name and rarity for history display
-      // Note: seed and checksum are required (NOT NULL constraint)
       let matchResult;
       try {
         matchResult = await pool.query(
           `INSERT INTO matches (
             match_id, mode, p1_address, p1_score, duration_ms, room_code, 
-            p1_ship_name, p1_ship_rarity, seed, checksum, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+            p1_ship_name, p1_ship_rarity, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
           RETURNING *`,
           [matchId, normalizedMode, address, score, duration, roomCode || null, 
-           shipName || 'Classic Fighter', shipRarity || 'Classic', seed, checksum]
+           shipName || 'Classic Fighter', shipRarity || 'Classic']
         );
         console.log('✅ Match saved:', matchResult.rows[0].match_id);
       } catch (matchError) {
@@ -435,14 +428,12 @@ router.post('/save', async (req, res) => {
           
           // Retry match insertion
           const matchId = randomUUID();
-          const seed = Math.floor(Math.random() * 1000000);
-          const checksum = '';
           const matchResult = await pool.query(
             `INSERT INTO matches (
-              match_id, mode, p1_address, p1_score, duration_ms, room_code, seed, checksum, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+              match_id, mode, p1_address, p1_score, duration_ms, room_code, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
             RETURNING *`,
-            [matchId, normalizedMode, address, score, duration, roomCode || null, seed, checksum]
+            [matchId, normalizedMode, address, score, duration, roomCode || null]
           );
           
           // Update leaderboard
