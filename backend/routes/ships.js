@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import { pool } from '../server.js';
+import { ensureUser } from '../utils/userId.js';
 
 const router = express.Router();
 
@@ -49,12 +50,7 @@ router.post('/index', async (req, res) => {
         dbResult = result.rows[0];
 
         // Ensure user exists
-        await pool.query(
-          `INSERT INTO users (address, user_id, created_at)
-           VALUES ($1, $2, NOW())
-           ON CONFLICT (address) DO NOTHING`,
-          [address, `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`]
-        );
+        await ensureUser(pool, address);
       } catch (dbError) {
         console.warn('⚠️  Database error (continuing with mock response):', dbError.message);
         // Continue without database
@@ -171,12 +167,7 @@ router.post('/mint', async (req, res) => {
         dbResult = result.rows[0];
 
         // Ensure user exists
-        await pool.query(
-          `INSERT INTO users (address, user_id, created_at)
-           VALUES ($1, $2, NOW())
-           ON CONFLICT (address) DO NOTHING`,
-          [address, `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`]
-        );
+        await ensureUser(pool, address);
       } catch (dbError) {
         console.warn('⚠️  Database error (continuing with mock response):', dbError.message);
         // Continue without database

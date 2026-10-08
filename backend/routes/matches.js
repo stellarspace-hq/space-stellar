@@ -1,6 +1,7 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import { ensureUser } from '../utils/userId.js';
 
 const router = express.Router();
 
@@ -283,12 +284,7 @@ router.post('/save', async (req, res) => {
       console.log('🔄 Step 1: Ensuring user exists...');
       // Ensure user exists first
       try {
-        await pool.query(
-          `INSERT INTO users (address, user_id, created_at) 
-           VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-           ON CONFLICT (address) DO NOTHING`,
-          [address]
-        );
+        await ensureUser(pool, address);
         console.log('✅ User exists or created');
       } catch (userError) {
         console.error('❌ Error ensuring user exists:', userError.message);
@@ -426,12 +422,7 @@ router.post('/save', async (req, res) => {
         console.error('❌ Foreign key constraint error:', dbError.message);
         // Try to create user and retry
         try {
-          await pool.query(
-            `INSERT INTO users (address, user_id, created_at) 
-             VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-             ON CONFLICT (address) DO NOTHING`,
-            [address]
-          );
+          await ensureUser(pool, address);
           
           // Retry match insertion
           const matchId = randomUUID();

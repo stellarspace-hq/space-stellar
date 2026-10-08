@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { STARTING_ID } from '../utils/userId.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,8 +12,6 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/space_stellar',
 });
-
-const STARTING_ID = 243681; // ID awal
 
 const migrate = async () => {
   try {

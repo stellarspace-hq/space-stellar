@@ -1,28 +1,9 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import { getNextUserId, formatUserId } from '../utils/userId.js';
 
 const router = express.Router();
-
-// Generate unique user ID (deprecated - now using sequential numeric ID)
-const generateUserId = () => {
-  return `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-};
-
-// Get next sequential user ID from database
-// ID starts from 243681 and auto-increments
-const getNextUserId = async () => {
-  try {
-    // Get the next ID from sequence
-    const result = await pool.query("SELECT nextval('user_id_seq') as next_id");
-    return parseInt(result.rows[0].next_id);
-  } catch (error) {
-    // If sequence doesn't exist, fallback to max ID + 1
-    console.warn('Sequence not found, using fallback method:', error.message);
-    const result = await pool.query('SELECT COALESCE(MAX(id), 243680) + 1 as next_id FROM users');
-    return parseInt(result.rows[0].next_id);
-  }
-};
 
 // Get or create user profile
 router.get('/profile/:address', async (req, res) => {
@@ -33,7 +14,7 @@ router.get('/profile/:address', async (req, res) => {
         success: true,
         user: {
           address: req.params.address,
-          userId: `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          userId: formatUserId(Math.floor(Math.random() * 1000000000)),
           username: '',
           stats: { totalMatches: 0, wins: 0, bestScore: 0, shipsOwned: 0 }
         }
@@ -50,10 +31,8 @@ router.get('/profile/:address', async (req, res) => {
 
     let user;
     if (userResult.rows.length === 0) {
-      // Create new user with sequential numeric ID
-      // ID akan auto-generate dari sequence (starting from 243681)
-      // Get next ID first, then insert
-      const nextId = await getNextUserId();
+      // Create new user with the shared sequential numeric ID
+      const nextId = await getNextUserId(pool);
       
       // Insert user dengan id yang sudah di-generate
       // id column memiliki default dari sequence, tapi kita specify explicit untuk konsistensi
@@ -62,7 +41,7 @@ router.get('/profile/:address', async (req, res) => {
         `INSERT INTO users (id, address, user_id, points, created_at) 
          VALUES ($1, $2, $3, 2000, NOW()) 
          RETURNING *`,
-        [nextId, address, `USER-${nextId}`]
+        [nextId, address, formatUserId(nextId)]
       );
       user = insertResult.rows[0];
       
@@ -99,8 +78,8 @@ router.get('/profile/:address', async (req, res) => {
       user: {
         ...user,
         // Include numeric ID (id) and text user_id
-        id: user.id, // Sequential numeric ID (243681, 243682, ...)
-        userId: user.user_id, // Text user_id (USER-243681, USER-243682, ...)
+        id: user.id, // Sequential numeric ID
+        userId: user.user_id, // Text user_id
         points: parseInt(user.points) || 2000, // Platform points/koin (off-chain)
         stats: {
           totalMatches: parseInt(stats.total_matches) || 0,
