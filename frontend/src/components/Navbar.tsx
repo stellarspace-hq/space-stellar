@@ -22,7 +22,9 @@ const Navbar = () => {
           const response = await fetch(`${apiUrl}/api/points/${address}`)
           const data = await response.json()
           if (data.success) {
-            setPoints(data.points || 2000)
+            // A balance of 0 is valid: only fall back when the API did not
+            // return a usable numeric balance.
+            setPoints(Number.isFinite(data.points) ? data.points : 2000)
           }
         } catch (error) {
           console.error('Error loading points:', error)

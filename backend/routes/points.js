@@ -35,7 +35,14 @@ router.get('/:address', async (req, res) => {
       });
     }
 
-    const points = parseInt(result.rows[0].points) || 2000;
+    // A stored balance of 0 is valid; only fall back to the welcome bonus when
+    // the value is genuinely absent or unparseable.
+    const rawPoints = result.rows[0].points;
+    const parsedPoints = Number(rawPoints);
+    const points =
+      rawPoints === null || rawPoints === undefined || !Number.isFinite(parsedPoints)
+        ? 2000
+        : parsedPoints;
 
     res.json({
       success: true,
