@@ -1,6 +1,13 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import {
+  NO_ROOM_DUPLICATE_SQL,
+  ROOM_DUPLICATE_SQL,
+  noRoomDuplicateParams,
+  roomDuplicateParams,
+  validateMode,
+} from '../utils/matchRules.js';
 
 const router = express.Router();
 
@@ -230,22 +237,13 @@ router.post('/save', async (req, res) => {
       duration = 0
     } = req.body;
 
-    // Normalize mode value (trim, lowercase, validate)
-    const normalizedMode = mode ? mode.toString().trim().toLowerCase() : 'solo';
-    
-    // Validate mode against database constraint
-    const validModes = ['solo', 'versus', 'multiplayer'];
-    if (!validModes.includes(normalizedMode)) {
-      console.error('❌ Invalid mode value:', mode, '-> normalized:', normalizedMode);
-      console.error('   Valid modes:', validModes);
-      return res.status(400).json({ 
-        success: false, 
-        message: `Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`,
-        received: mode,
-        normalized: normalizedMode,
-        validModes
-      });
+    // Normalize and validate mode against the database CHECK constraint.
+    const modeCheck = validateMode(mode);
+    if (!modeCheck.ok) {
+      console.error('❌ Invalid mode value:', mode, '-> normalized:', modeCheck.body.normalized);
+      return res.status(modeCheck.status).json(modeCheck.body);
     }
+    const normalizedMode = modeCheck.mode;
 
     console.log('💾 Saving match:', { roomCode, mode: normalizedMode, address, score, shipRarity, shipName, duration });
 
@@ -303,14 +301,8 @@ router.post('/save', async (req, res) => {
       // Increase time window to 10 seconds to catch all duplicates
       if (roomCode) {
         const duplicateCheck = await pool.query(
-          `SELECT match_id FROM matches 
-           WHERE room_code = $1 
-           AND p1_address = $2 
-           AND p1_score = $3 
-           AND created_at > NOW() - INTERVAL '10 seconds'
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [roomCode, address, score]
+          ROOM_DUPLICATE_SQL,
+          roomDuplicateParams(roomCode, address, score)
         );
         
         if (duplicateCheck.rows.length > 0) {
@@ -328,14 +320,8 @@ router.post('/save', async (req, res) => {
       // Same address and score within last 10 seconds (only if no room_code provided)
       if (!roomCode) {
         const duplicateCheckNoRoom = await pool.query(
-          `SELECT match_id FROM matches 
-           WHERE p1_address = $1 
-           AND p1_score = $2 
-           AND created_at > NOW() - INTERVAL '10 seconds'
-           AND (room_code IS NULL OR room_code = '')
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [address, score]
+          NO_ROOM_DUPLICATE_SQL,
+          noRoomDuplicateParams(address, score)
         );
         
         if (duplicateCheckNoRoom.rows.length > 0) {
