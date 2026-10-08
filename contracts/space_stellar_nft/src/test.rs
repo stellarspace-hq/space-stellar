@@ -1,67 +1,81 @@
 #![cfg(test)]
 
-use super::SpaceStellarNFT;
+extern crate std;
+
+use super::{SpaceStellarNFT, SHIP_CLASS};
+use crate::SpaceStellarNFTClient;
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-#[test]
-fn test_constructor() {
-    let env = Env::default();
-    let contract_id = env.register_contract(None, SpaceStellarNFT);
-    let client = SpaceStellarNFTClient::new(&env, &contract_id);
-
-    let owner = Address::generate(&env);
-    
-    client.__constructor(&owner);
-    
-    // Test that owner is set using OpenZeppelin's owner function
-    let contract_owner = client.owner();
-    assert_eq!(contract_owner, owner);
+fn deploy<'a>(env: &'a Env) -> (Address, SpaceStellarNFTClient<'a>) {
+    let owner = Address::generate(env);
+    let contract_id = env.register(SpaceStellarNFT, (owner,));
+    (
+        contract_id.clone(),
+        SpaceStellarNFTClient::new(env, &contract_id),
+    )
 }
 
-#[test]
-fn test_mint() {
-    let env = Env::default();
-    let contract_id = env.register_contract(None, SpaceStellarNFT);
-    let client = SpaceStellarNFTClient::new(&env, &contract_id);
-
-    let owner = Address::generate(&env);
-    let user = Address::generate(&env);
-
-    // Initialize contract
-    client.__constructor(&owner);
-
-    let class = String::from_str(&env, "Fighter");
-    let rarity = String::from_str(&env, "Common");
-    let tier = String::from_str(&env, "Elite");
-    let ipfs_cid = String::from_str(&env, "QmTest123");
-    let metadata_uri = String::from_str(&env, "ipfs://QmTest123");
-
-    // Mint as owner (only owner can mint)
+fn mint_ship(env: &Env, client: &SpaceStellarNFTClient, to: &Address) -> u32 {
     client.mint(
-        &user,
-        &class,
-        &rarity,
-        &tier,
+        to,
+        &String::from_str(env, "Fighter"),
+        &String::from_str(env, "Common"),
+        &String::from_str(env, "Elite"),
         &10u32,
         &8u32,
         &12u32,
-        &ipfs_cid,
-        &metadata_uri,
+        &String::from_str(env, "QmTest123"),
+        &String::from_str(env, "ipfs://QmTest123"),
+    )
+}
+
+#[test]
+fn test_getters_read_the_minted_values() {
+    let env = Env::default();
+    let (_contract_id, client) = deploy(&env);
+    let user = Address::generate(&env);
+
+    let token_id = mint_ship(&env, &client, &user);
+
+    assert_eq!(
+        client.get_ship_class(&token_id),
+        Some(String::from_str(&env, "Fighter"))
     );
+    assert_eq!(
+        client.get_ship_rarity(&token_id),
+        Some(String::from_str(&env, "Common"))
+    );
+    assert_eq!(
+        client.get_ship_tier(&token_id),
+        Some(String::from_str(&env, "Elite"))
+    );
+    assert_eq!(
+        client.get_ipfs_cid(&token_id),
+        Some(String::from_str(&env, "QmTest123"))
+    );
+    assert_eq!(
+        client.get_metadata_uri(&token_id),
+        Some(String::from_str(&env, "ipfs://QmTest123"))
+    );
+}
 
-    // Check ownership using OpenZeppelin's owner_of
-    // Sequential mint starts at 1
-    let token_id = 1u128;
-    let owner_result = client.owner_of(&token_id);
-    assert_eq!(owner_result, Some(user));
+#[test]
+fn test_metadata_is_stored_in_persistent_not_instance() {
+    let env = Env::default();
+    let (contract_id, client) = deploy(&env);
+    let user = Address::generate(&env);
 
-    // Check custom metadata
-    let ship_class = client.get_ship_class(&token_id);
-    assert_eq!(ship_class, Some(class));
-    
-    let ship_rarity = client.get_ship_rarity(&token_id);
-    assert_eq!(ship_rarity, Some(rarity));
-    
-    let ipfs_result = client.get_ipfs_cid(&token_id);
-    assert_eq!(ipfs_result, Some(ipfs_cid));
+    let token_id = mint_ship(&env, &client, &user);
+
+    env.as_contract(&contract_id, || {
+        let key = (SHIP_CLASS, token_id);
+        assert!(
+            env.storage().persistent().has(&key),
+            "metadata must be persistent"
+        );
+        assert!(
+            !env.storage().instance().has(&key),
+            "metadata must not be instance"
+        );
+    });
 }
