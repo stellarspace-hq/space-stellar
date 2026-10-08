@@ -5,7 +5,6 @@
 
 import { 
   Contract, 
-  scValToNative, 
   Networks,
   Keypair,
   TransactionBuilder,
@@ -13,6 +12,7 @@ import {
   Account
 } from '@stellar/stellar-sdk'
 import { SorobanRpc } from '@stellar/stellar-sdk'
+import { extractOwnerAddress } from './contractOwner.js'
 
 /**
  * Get owner address from NFT ship contract
@@ -59,9 +59,9 @@ export async function getShipContractOwner(contractId, network = 'testnet', rpcU
     // Simulate transaction (read-only)
     const simulateResult = await rpcServer.simulateTransaction(transaction)
 
-    if (simulateResult && simulateResult.result && simulateResult.result.retval) {
-      const ownerAddress = scValToNative(simulateResult.result.retval)
-      return ownerAddress.toString()
+    const ownerAddress = extractOwnerAddress(simulateResult)
+    if (ownerAddress) {
+      return ownerAddress
     }
 
     throw new Error('Failed to get owner address from contract')
