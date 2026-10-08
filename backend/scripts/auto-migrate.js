@@ -15,12 +15,12 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/space_stellar',
 });
 
-export const runMigrations = async () => {
+export const runMigrations = async (db = pool) => {
   try {
     console.log('🔄 Checking database schema...');
 
     // Check if users table exists
-    const tableCheck = await pool.query(`
+    const tableCheck = await db.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
@@ -32,7 +32,7 @@ export const runMigrations = async () => {
       console.log('✅ Database tables already exist');
       
       // Check if points column exists
-      const pointsCheck = await pool.query(`
+      const pointsCheck = await db.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.columns 
           WHERE table_name = 'users' AND column_name = 'points'
@@ -41,11 +41,11 @@ export const runMigrations = async () => {
       
       if (!pointsCheck.rows[0].exists) {
         console.log('🔄 Adding points column...');
-        await pool.query(`
+        await db.query(`
           ALTER TABLE users 
           ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 2000 NOT NULL CHECK (points >= 0);
         `);
-        await pool.query(`
+        await db.query(`
           UPDATE users SET points = 2000 WHERE points IS NULL;
         `);
         console.log('✅ Points column added');
@@ -57,12 +57,12 @@ export const runMigrations = async () => {
     console.log('📦 Creating database tables...');
 
     // Create sequence for user ID
-    await pool.query(`
+    await db.query(`
       CREATE SEQUENCE IF NOT EXISTS user_id_seq START WITH 1;
     `);
 
     // Create users table
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         id BIGINT PRIMARY KEY DEFAULT nextval('user_id_seq'),
         address TEXT UNIQUE NOT NULL,
@@ -80,7 +80,7 @@ export const runMigrations = async () => {
     `);
 
     // Create trigger to update updated_at timestamp
-    await pool.query(`
+    await db.query(`
       CREATE OR REPLACE FUNCTION update_updated_at_column()
       RETURNS TRIGGER AS $$
       BEGIN
@@ -90,7 +90,7 @@ export const runMigrations = async () => {
       $$ language 'plpgsql';
     `);
 
-    await pool.query(`
+    await db.query(`
       DROP TRIGGER IF EXISTS update_users_updated_at ON users;
       CREATE TRIGGER update_users_updated_at
       BEFORE UPDATE ON users
@@ -99,7 +99,7 @@ export const runMigrations = async () => {
     `);
 
     // Create ships table
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS ships (
         token_id BIGINT PRIMARY KEY,
         owner_address TEXT NOT NULL REFERENCES users(address) ON DELETE CASCADE,
@@ -115,13 +115,13 @@ export const runMigrations = async () => {
     `);
     
     // Add tier column if it doesn't exist
-    await pool.query(`
+    await db.query(`
       ALTER TABLE ships 
       ADD COLUMN IF NOT EXISTS tier TEXT;
     `);
 
     // Create rooms table
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS rooms (
         room_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         room_code TEXT UNIQUE NOT NULL,
@@ -137,7 +137,7 @@ export const runMigrations = async () => {
     `);
 
     // Create matches table
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS matches (
         match_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         mode TEXT CHECK (mode IN ('solo','versus','multiplayer')) NOT NULL,
@@ -160,7 +160,7 @@ export const runMigrations = async () => {
     `);
 
     // Create leaderboard table
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS leaderboard (
         address TEXT PRIMARY KEY REFERENCES users(address) ON DELETE CASCADE,
         best_score INT NOT NULL,
@@ -169,7 +169,7 @@ export const runMigrations = async () => {
     `);
 
     // Create indexes
-    await pool.query(`
+    await db.query(`
       CREATE INDEX IF NOT EXISTS idx_ships_owner ON ships(owner_address);
       CREATE INDEX IF NOT EXISTS idx_matches_p1 ON matches(p1_address);
       CREATE INDEX IF NOT EXISTS idx_matches_p2 ON matches(p2_address);
