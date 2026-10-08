@@ -206,7 +206,7 @@ cd backend && npm install && cd ..
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install wasm32 target for contract compilation
-rustup target add wasm32-unknown-unknown
+rustup target add wasm32v1-none
 ```
 
 ### Step 4: Install Scaffold Stellar CLI
@@ -259,15 +259,12 @@ PFP_CONTRACT_OWNER_SECRET=your_owner_secret_key_here
 ### Step 6: Build Smart Contracts
 
 ```bash
-# Build all contracts
-npm run deploy:build
+# Build all workspace contracts with the toolchain's wasm target
+cargo build --release --target wasm32v1-none \
+  --package space_stellar_nft --package space_stellar_pfp
 
-# Or build individually
-cd contracts/space_stellar_nft
-cargo build --target wasm32-unknown-unknown --release
-cd ../space_stellar_pfp
-cargo build --target wasm32-unknown-unknown --release
-cd ../..
+# Or use the Scaffold Stellar build, which also emits the TypeScript clients
+npm run deploy:build
 ```
 
 ### Step 7: Run Development Servers
@@ -440,14 +437,9 @@ This project uses [Scaffold Stellar Registry](https://scaffoldstellar.org/docs/r
 #### 1. Build Contracts
 
 ```bash
-# Build NFT contract
-cd contracts/space_stellar_nft
-cargo build --target wasm32-unknown-unknown --release
-
-# Build PFP contract
-cd ../space_stellar_pfp
-cargo build --target wasm32-unknown-unknown --release
-cd ../..
+# From the repository root, build the canonical workspace contracts
+cargo build --release --target wasm32v1-none \
+  --package space_stellar_nft --package space_stellar_pfp
 ```
 
 #### 2. Publish Contracts to Registry
@@ -455,7 +447,7 @@ cd ../..
 **Publish NFT Contract:**
 ```bash
 stellar registry publish \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_nft.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_nft.wasm \
   --wasm-name space-stellar-nft \
   --binver "1.0.0" \
   --network testnet
@@ -464,7 +456,7 @@ stellar registry publish \
 **Publish PFP Contract:**
 ```bash
 stellar registry publish \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_pfp.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_pfp.wasm \
   --wasm-name space-stellar-pfp \
   --binver "1.0.0" \
   --network testnet
@@ -729,15 +721,14 @@ npm run deploy:mainnet   # Deploy to mainnet
 ### Contract Development
 
 ```bash
-# Build contract
-cd contracts/space_stellar_nft
-cargo build --target wasm32-unknown-unknown --release
+# Build contract (from the repository root)
+cargo build --release --target wasm32v1-none --package space_stellar_nft
 
 # Test contract
-cargo test
+cargo test --package space_stellar_nft
 
 # Check contract size
-ls -lh target/wasm32-unknown-unknown/release/space_stellar_nft.wasm
+ls -lh target/wasm32v1-none/release/space_stellar_nft.wasm
 ```
 
 ---
