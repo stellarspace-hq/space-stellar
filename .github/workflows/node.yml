@@ -75,3 +75,17 @@ jobs:
     - run: npm run build
     - name: Run tests
       run: npm test --if-present
+
+  wasm-size:
+    name: Wasm Size Regression
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@1.89.0
+      with:
+        targets: wasm32v1-none
+    - name: Build contracts to wasm
+      run: cargo build --release --target wasm32v1-none --workspace
+    - name: Check wasm sizes against the recorded budget
+      run: node scripts/check-wasm-size.js
