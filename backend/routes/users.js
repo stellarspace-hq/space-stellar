@@ -1,6 +1,7 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import { requireSignedAddress, authPayload } from '../utils/auth.js';
 
 const router = express.Router();
 
@@ -22,6 +23,56 @@ const getNextUserId = async () => {
     const result = await pool.query('SELECT COALESCE(MAX(id), 243680) + 1 as next_id FROM users');
     return parseInt(result.rows[0].next_id);
   }
+};
+
+// A profile write must prove control of the address in the path, so a visitor
+// cannot edit another player's public profile.
+const requireProfileAddressSignature = requireSignedAddress(
+  (req) => req.params.address,
+  authPayload
+);
+
+const FIELD_LIMITS = {
+  username: 32,
+  bio: 280,
+  email: 254,
+  avatarUrl: 500,
+};
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Validate and normalise the mutable profile fields. Returns { error } when a
+// supplied value is invalid.
+const validateProfileFields = ({ username, email, bio, avatarUrl }) => {
+  if (username !== undefined && username !== null) {
+    if (typeof username !== 'string' || username.trim().length === 0) {
+      return { error: 'Username must be a non-empty string' };
+    }
+    if (username.trim().length > FIELD_LIMITS.username) {
+      return { error: `Username must be at most ${FIELD_LIMITS.username} characters` };
+    }
+  }
+
+  if (email !== undefined && email !== null && email !== '') {
+    if (typeof email !== 'string' || email.length > FIELD_LIMITS.email || !EMAIL_PATTERN.test(email)) {
+      return { error: 'Email is not a valid address' };
+    }
+  }
+
+  if (bio !== undefined && bio !== null) {
+    if (typeof bio !== 'string' || bio.length > FIELD_LIMITS.bio) {
+      return { error: `Bio must be at most ${FIELD_LIMITS.bio} characters` };
+    }
+  }
+
+  if (avatarUrl !== undefined && avatarUrl !== null && avatarUrl !== '') {
+    if (typeof avatarUrl !== 'string' || avatarUrl.length > FIELD_LIMITS.avatarUrl) {
+      return { error: `Avatar URL must be at most ${FIELD_LIMITS.avatarUrl} characters` };
+    }
+  }
+
+  // Immutable fields may be present in a legacy client body, but they are never
+  // written. Callers that try to change them have the attempt ignored.
+  return { error: null };
 };
 
 // Get or create user profile
@@ -120,25 +171,34 @@ router.get('/profile/:address', async (req, res) => {
 });
 
 // Update user profile
-// NOTE: ID tidak bisa diubah (readonly setelah dibuat)
-router.put('/profile/:address', async (req, res) => {
+//
+// SECURITY: the caller must prove control of the `:address` in the path with a
+// signed challenge (see requireProfileAddressSignature). Immutable fields
+// (user_id / userId, points, default_ship_token_id) are never written, and
+// free-text fields are length/content validated. ID tidak bisa diubah
+// (readonly setelah dibuat).
+router.put('/profile/:address', requireProfileAddressSignature, async (req, res) => {
   try {
     const { address } = req.params;
-    const { username, email, bio, avatarUrl, defaultShipTokenId } = req.body;
+    const { username, email, bio, avatarUrl } = req.body;
 
-    // ID tidak bisa diubah - remove dari update
-    // userId juga tidak bisa diubah setelah dibuat
+    const { error: validationError } = validateProfileFields({ username, email, bio, avatarUrl });
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
+
+    // Only the whitelisted, mutable columns are ever updated. Immutable fields
+    // (user_id, points, default_ship_token_id) present in the body are ignored.
     const result = await pool.query(
       `UPDATE users 
        SET username = COALESCE($1, username),
            email = COALESCE($2, email),
            bio = COALESCE($3, bio),
            avatar_url = COALESCE($4, avatar_url),
-           default_ship_token_id = COALESCE($5, default_ship_token_id),
            updated_at = NOW()
-       WHERE address = $6
+       WHERE address = $5
        RETURNING *`,
-      [username, email, bio, avatarUrl, defaultShipTokenId, address]
+      [username, email, bio, avatarUrl, address]
     );
 
     if (result.rows.length === 0) {
@@ -177,4 +237,3 @@ router.post('/profile/:address/last-login', async (req, res) => {
 });
 
 export default router;
-
