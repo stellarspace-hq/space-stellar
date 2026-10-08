@@ -2,31 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWalletKit } from '../contexts/WalletContext'
 import { PFPMintClient } from '../utils/pfpContract'
+import { PFP_VARIANTS, getRandomPFP } from '../utils/gacha'
 import './SpecialLaunchEvent.css'
-
-const PFP_VARIANTS = [
-  { id: 1, name: 'Cosmic Warrior', rarity: 'Common', image: '/nft-images/pfp/pfp-1.png', weight: 40 },
-  { id: 2, name: 'Stellar Explorer', rarity: 'Uncommon', image: '/nft-images/pfp/pfp-2.png', weight: 25 },
-  { id: 3, name: 'Nebula Guardian', rarity: 'Rare', image: '/nft-images/pfp/pfp-3.png', weight: 15 },
-  { id: 4, name: 'Galaxy Commander', rarity: 'Epic', image: '/nft-images/pfp/pfp-4.png', weight: 10 },
-  { id: 5, name: 'Void Master', rarity: 'Legendary', image: '/nft-images/pfp/pfp-5.png', weight: 7 },
-  { id: 6, name: 'Cosmic Legend', rarity: 'Mythic', image: '/nft-images/pfp/pfp-6.png', weight: 3 }
-]
-
-// Weighted random selection
-const getRandomPFP = () => {
-  const totalWeight = PFP_VARIANTS.reduce((sum, pfp) => sum + pfp.weight, 0)
-  let random = Math.random() * totalWeight
-  
-  for (const pfp of PFP_VARIANTS) {
-    random -= pfp.weight
-    if (random <= 0) {
-      return pfp
-    }
-  }
-  
-  return PFP_VARIANTS[0] // Fallback
-}
 
 const SpecialLaunchEvent = () => {
   const navigate = useNavigate()
