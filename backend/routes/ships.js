@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import { pool } from '../server.js';
+import { getShipImage } from '../utils/shipMapping.js';
 
 const router = express.Router();
 
@@ -302,31 +303,6 @@ router.get('/:tokenId', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-function getShipImage(rarity) {
-  // Map rarity to GIF file
-  const imageMap = {
-    'Common': '/nft-images/ships/ship-elite.gif',
-    'Epic': '/nft-images/ships/ship-epic.gif',
-    'Legendary': '/nft-images/ships/ship-legendary.gif',
-    'Master': '/nft-images/ships/ship-master.gif',
-    'Ultra': '/nft-images/ships/ship-ultra.gif'
-  };
-  
-  return imageMap[rarity] || '/nft-images/ships/ship-classic.gif';
-}
-
-// Helper untuk get ship image path berdasarkan rarity
-function getShipImagePath(rarity) {
-  const rarityMap = {
-    'Common': '/nft-images/ships/ship-elite.gif',
-    'Epic': '/nft-images/ships/ship-epic.gif',
-    'Legendary': '/nft-images/ships/ship-legendary.gif',
-    'Master': '/nft-images/ships/ship-master.gif',
-    'Ultra': '/nft-images/ships/ship-ultra.gif'
-  };
-  return rarityMap[rarity] || '/nft-images/ships/ship-classic.gif';
-}
 
 export default router;
 
