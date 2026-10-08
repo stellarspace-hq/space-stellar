@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
@@ -23,68 +23,15 @@ const Collection = () => {
   const [ships, setShips] = useState<Ship[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedShip, setSelectedShip] = useState<Ship | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0) // PERBAIKAN: Force refresh key
+  // Guards that collapse focus/visibility refreshes into a single request.
+  const inFlightRef = useRef(false)
+  const lastRefreshRef = useRef(0)
 
-  useEffect(() => {
-    if (address) {
-      loadCollection()
-    }
-  }, [address, refreshKey]) // PERBAIKAN: Add refreshKey dependency
-
-  // PERBAIKAN: Refresh collection when window gains focus (after minting from Store)
-  useEffect(() => {
-    const handleFocus = () => {
-      if (address) {
-        console.log('🔄 Window focused, refreshing collection...')
-        setRefreshKey(prev => prev + 1) // Trigger refresh
-      }
-    }
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  }, [address])
-
-  // PERBAIKAN: Expose refresh function globally for manual refresh
-  useEffect(() => {
-    (window as any).refreshCollection = () => {
-      console.log('🔄 Manual collection refresh triggered')
-      setRefreshKey(prev => prev + 1)
-    }
-    return () => {
-      delete (window as any).refreshCollection
-    }
-  }, [])
-
-  // Auto-refresh collection when navigating to this page
-  // This helps show newly minted NFTs immediately
-  useEffect(() => {
+  const loadCollection = useCallback(async () => {
     if (!address) return
-    
-    const handleFocus = () => {
-      console.log('🔄 Page focused, refreshing collection...')
-      loadCollection()
-    }
-    
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log('🔄 Page visible, refreshing collection...')
-        loadCollection()
-      }
-    }
-    
-    // Refresh when page becomes visible
-    window.addEventListener('focus', handleFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    
-    return () => {
-      window.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address])
+    if (inFlightRef.current) return // dedupe overlapping refreshes
 
-  const loadCollection = async () => {
-    if (!address) return
-
+    inFlightRef.current = true
     setLoading(true)
     try {
       console.log('📦 Loading collection for address:', address)
@@ -307,9 +254,48 @@ const Collection = () => {
       // Show empty state if both backend and blockchain fail
       setShips([])
     } finally {
+      inFlightRef.current = false
       setLoading(false)
     }
-  }
+  }, [address])
+
+  // Load once per address (and whenever the memoised refresh callback changes).
+  useEffect(() => {
+    loadCollection()
+  }, [loadCollection])
+
+  // Single listener set. Both focus and visibilitychange funnel through one
+  // throttled refresh, so returning to the tab issues exactly one ships
+  // request, a rapid focus/blur cycle cannot stack requests, and the listeners
+  // are removed symmetrically on unmount.
+  useEffect(() => {
+    const refresh = () => {
+      const now = Date.now()
+      if (now - lastRefreshRef.current < 1000) return
+      lastRefreshRef.current = now
+      loadCollection()
+    }
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refresh()
+    }
+
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [loadCollection])
+
+  // Expose a manual refresh hook (used after minting from the Store page).
+  useEffect(() => {
+    const w = window as any
+    w.refreshCollection = () => loadCollection()
+    return () => {
+      delete w.refreshCollection
+    }
+  }, [loadCollection])
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
