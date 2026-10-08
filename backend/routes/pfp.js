@@ -9,6 +9,9 @@ const router = express.Router()
 const PINATA_API_KEY = process.env.PINATA_API_KEY || ''
 const PINATA_SECRET_KEY = process.env.PINATA_SECRET_KEY || ''
 const PINATA_JWT = process.env.PINATA_JWT || ''
+// Explicit opt-in for a simulated mint; never enabled by default so a deployment
+// cannot report a fabricated token ID as a real on-chain mint.
+const PFP_MOCK = process.env.PFP_MOCK === 'true'
 
 /**
  * Upload PFP NFT metadata to Pinata IPFS
@@ -157,29 +160,46 @@ router.post('/mint', async (req, res) => {
       : 'https://soroban-rpc.testnet.stellar.org')
     
     if (!PFP_CONTRACT_ID) {
-      console.warn('⚠️ PFP_CONTRACT_ID not configured, using mock response')
-      // Return mock response for development
-      const tokenId = Math.floor(Math.random() * 1000000) + 1
-      return res.json({
-        success: true,
-        tokenId,
-        message: 'PFP NFT minted successfully (mock - contract not deployed)',
-        ipfsHash,
-        metadataUri,
-        contractId: null
+      if (PFP_MOCK) {
+        console.warn('⚠️ PFP_CONTRACT_ID not configured; PFP_MOCK=true, simulating mint')
+        return res.json({
+          success: true,
+          mock: true,
+          configured: false,
+          message: 'PFP NFT mint simulated (PFP_MOCK=true; contract not deployed). No on-chain token exists.',
+          ipfsHash,
+          metadataUri,
+          contractId: null
+        })
+      }
+      console.error('❌ PFP_CONTRACT_ID not configured; refusing to fabricate a token ID')
+      return res.status(503).json({
+        success: false,
+        configured: false,
+        code: 'PFP_NOT_CONFIGURED',
+        error: 'PFP minting is not configured on this deployment (PFP_CONTRACT_ID is missing).'
       })
     }
 
     if (!PFP_CONTRACT_OWNER_SECRET) {
-      console.warn('⚠️ PFP_CONTRACT_OWNER_SECRET not configured, using mock response')
-      const tokenId = Math.floor(Math.random() * 1000000) + 1
-      return res.json({
-        success: true,
-        tokenId,
-        message: 'PFP NFT minted successfully (mock - owner secret not configured)',
-        ipfsHash,
-        metadataUri,
-        contractId: PFP_CONTRACT_ID
+      if (PFP_MOCK) {
+        console.warn('⚠️ PFP_CONTRACT_OWNER_SECRET not configured; PFP_MOCK=true, simulating mint')
+        return res.json({
+          success: true,
+          mock: true,
+          configured: true,
+          message: 'PFP NFT mint simulated (PFP_MOCK=true; owner secret not configured). No on-chain token exists.',
+          ipfsHash,
+          metadataUri,
+          contractId: PFP_CONTRACT_ID
+        })
+      }
+      console.error('❌ PFP_CONTRACT_OWNER_SECRET not configured; refusing to fabricate a token ID')
+      return res.status(503).json({
+        success: false,
+        configured: false,
+        code: 'PFP_NOT_CONFIGURED',
+        error: 'PFP minting is not configured on this deployment (PFP_CONTRACT_OWNER_SECRET is missing).'
       })
     }
 
