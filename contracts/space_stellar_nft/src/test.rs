@@ -1,67 +1,123 @@
 #![cfg(test)]
 
+extern crate std;
+
 use super::SpaceStellarNFT;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use crate::SpaceStellarNFTClient;
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    Address, Env, String, TryFromVal, Val, Vec,
+};
 
-#[test]
-fn test_constructor() {
-    let env = Env::default();
-    let contract_id = env.register_contract(None, SpaceStellarNFT);
-    let client = SpaceStellarNFTClient::new(&env, &contract_id);
-
-    let owner = Address::generate(&env);
-    
-    client.__constructor(&owner);
-    
-    // Test that owner is set using OpenZeppelin's owner function
-    let contract_owner = client.owner();
-    assert_eq!(contract_owner, owner);
+fn deploy<'a>(env: &'a Env) -> SpaceStellarNFTClient<'a> {
+    let owner = Address::generate(env);
+    let contract_id = env.register(SpaceStellarNFT, (owner,));
+    SpaceStellarNFTClient::new(env, &contract_id)
 }
 
-#[test]
-fn test_mint() {
-    let env = Env::default();
-    let contract_id = env.register_contract(None, SpaceStellarNFT);
-    let client = SpaceStellarNFTClient::new(&env, &contract_id);
-
-    let owner = Address::generate(&env);
-    let user = Address::generate(&env);
-
-    // Initialize contract
-    client.__constructor(&owner);
-
-    let class = String::from_str(&env, "Fighter");
-    let rarity = String::from_str(&env, "Common");
-    let tier = String::from_str(&env, "Elite");
-    let ipfs_cid = String::from_str(&env, "QmTest123");
-    let metadata_uri = String::from_str(&env, "ipfs://QmTest123");
-
-    // Mint as owner (only owner can mint)
+fn mint_ship(env: &Env, client: &SpaceStellarNFTClient, to: &Address) -> u32 {
     client.mint(
-        &user,
-        &class,
-        &rarity,
-        &tier,
+        to,
+        &String::from_str(env, "Fighter"),
+        &String::from_str(env, "Common"),
+        &String::from_str(env, "Elite"),
         &10u32,
         &8u32,
         &12u32,
-        &ipfs_cid,
-        &metadata_uri,
+        &String::from_str(env, "QmTest123"),
+        &String::from_str(env, "ipfs://QmTest123"),
+    )
+}
+
+fn topic_u32(env: &Env, topics: &Vec<Val>, index: u32) -> Option<u32> {
+    topics
+        .get(index)
+        .and_then(|v| u32::try_from_val(env, &v).ok())
+}
+
+#[test]
+fn test_default_max_supply_is_set() {
+    let env = Env::default();
+    let client = deploy(&env);
+
+    assert_eq!(client.get_max_supply(), 10_000);
+}
+
+#[test]
+fn test_mint_requires_recipient_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = deploy(&env);
+
+    let user = Address::generate(&env);
+    let token_id = mint_ship(&env, &client, &user);
+
+    assert_eq!(client.owner_of(&token_id), user);
+}
+
+#[test]
+#[should_panic]
+fn test_mint_without_recipient_auth_panics() {
+    let env = Env::default();
+    let client = deploy(&env);
+
+    let user = Address::generate(&env);
+    // No authorization is mocked, so `to.require_auth()` must reject this.
+    mint_ship(&env, &client, &user);
+}
+
+#[test]
+fn test_mint_up_to_cap_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = deploy(&env);
+
+    client.set_max_supply(&3u32);
+
+    let user = Address::generate(&env);
+    mint_ship(&env, &client, &user);
+    mint_ship(&env, &client, &user);
+    mint_ship(&env, &client, &user);
+}
+
+#[test]
+#[should_panic]
+fn test_mint_past_cap_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = deploy(&env);
+
+    client.set_max_supply(&1u32);
+
+    let user = Address::generate(&env);
+    mint_ship(&env, &client, &user);
+    // The cap is reached, so a second mint must panic.
+    mint_ship(&env, &client, &user);
+}
+
+#[test]
+fn test_set_max_supply_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = deploy(&env);
+
+    client.set_max_supply(&7u32);
+    let events = env.events().all();
+    let found = events.iter().any(|(_contract, topics, _data)| {
+        topics.len() >= 2 && topic_u32(&env, &topics, 1) == Some(7u32)
+    });
+    assert!(
+        found,
+        "expected a max-supply-updated event carrying the new cap"
     );
+}
 
-    // Check ownership using OpenZeppelin's owner_of
-    // Sequential mint starts at 1
-    let token_id = 1u128;
-    let owner_result = client.owner_of(&token_id);
-    assert_eq!(owner_result, Some(user));
+#[test]
+#[should_panic]
+fn test_set_max_supply_requires_owner_auth() {
+    let env = Env::default();
+    let client = deploy(&env);
 
-    // Check custom metadata
-    let ship_class = client.get_ship_class(&token_id);
-    assert_eq!(ship_class, Some(class));
-    
-    let ship_rarity = client.get_ship_rarity(&token_id);
-    assert_eq!(ship_rarity, Some(rarity));
-    
-    let ipfs_result = client.get_ipfs_cid(&token_id);
-    assert_eq!(ipfs_result, Some(ipfs_cid));
+    // No authorization is mocked, so the owner-only check must reject this.
+    client.set_max_supply(&7u32);
 }
