@@ -3,7 +3,7 @@
 
 #![no_std]
 
-use soroban_sdk::{Address, contract, contractimpl, Env, String, Symbol};
+use soroban_sdk::{contract, contractevent, contractimpl, Address, Env, String, Symbol};
 use stellar_access::ownable::{self as ownable, Ownable};
 use stellar_macros::default_impl;
 use stellar_tokens::non_fungible::{Base, NonFungibleToken};
@@ -18,6 +18,28 @@ const SHIP_SHIELD: Symbol = soroban_sdk::symbol_short!("SHIP_SHD");
 const IPFS_CID: Symbol = soroban_sdk::symbol_short!("IPFS_CID");
 const METADATA_URI: Symbol = soroban_sdk::symbol_short!("META_URI");
 
+/// Emitted when a ship NFT is minted.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MintEvent {
+    #[topic]
+    pub token_id: u32,
+    #[topic]
+    pub owner: Address,
+}
+
+/// Emitted when a ship NFT changes owner.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferEvent {
+    #[topic]
+    pub token_id: u32,
+    #[topic]
+    pub from: Address,
+    #[topic]
+    pub to: Address,
+}
+
 #[contract]
 pub struct SpaceStellarNFT;
 
@@ -28,7 +50,7 @@ impl SpaceStellarNFT {
         let uri = String::from_str(e, "https://space-stellar.app");
         let name = String::from_str(e, "Space Stellar Ships");
         let symbol = String::from_str(e, "SSHIP");
-        
+
         Base::set_metadata(e, uri, name, symbol);
         ownable::set_owner(e, &owner);
     }
@@ -51,18 +73,36 @@ impl SpaceStellarNFT {
         // Use OpenZeppelin's sequential mint - returns token ID
         // Based on OpenZeppelin Wizard: https://wizard.openzeppelin.com/stellar#nonfungible
         let token_id = Base::sequential_mint(e, &to);
-        
+
         // Store custom metadata in blockchain
         // Using separate storage for each metadata field for simplicity
         e.storage().instance().set(&(SHIP_CLASS, &token_id), &class);
-        e.storage().instance().set(&(SHIP_RARITY, &token_id), &rarity);
+        e.storage()
+            .instance()
+            .set(&(SHIP_RARITY, &token_id), &rarity);
         e.storage().instance().set(&(SHIP_TIER, &token_id), &tier);
-        e.storage().instance().set(&(SHIP_ATTACK, &token_id), &attack);
+        e.storage()
+            .instance()
+            .set(&(SHIP_ATTACK, &token_id), &attack);
         e.storage().instance().set(&(SHIP_SPEED, &token_id), &speed);
-        e.storage().instance().set(&(SHIP_SHIELD, &token_id), &shield);
-        e.storage().instance().set(&(IPFS_CID, &token_id), &ipfs_cid);
-        e.storage().instance().set(&(METADATA_URI, &token_id), &metadata_uri);
-        
+        e.storage()
+            .instance()
+            .set(&(SHIP_SHIELD, &token_id), &shield);
+        e.storage()
+            .instance()
+            .set(&(IPFS_CID, &token_id), &ipfs_cid);
+        e.storage()
+            .instance()
+            .set(&(METADATA_URI, &token_id), &metadata_uri);
+
+        // Emit a structured mint event so indexers can follow the collection
+        // without polling storage.
+        MintEvent {
+            token_id,
+            owner: to.clone(),
+        }
+        .publish(e);
+
         // Return token ID so frontend can get it from transaction result
         token_id
     }
@@ -93,11 +133,27 @@ impl SpaceStellarNFT {
     }
 }
 
+/// Overrides the default `transfer` so a structured ownership-transfer event
+/// is emitted alongside the OpenZeppelin base behaviour.
+pub struct SpaceStellarNFTContractOverrides;
+
+impl stellar_tokens::non_fungible::ContractOverrides for SpaceStellarNFTContractOverrides {
+    fn transfer(e: &Env, from: &Address, to: &Address, token_id: u32) {
+        Base::transfer(e, from, to, token_id);
+        TransferEvent {
+            token_id,
+            from: from.clone(),
+            to: to.clone(),
+        }
+        .publish(e);
+    }
+}
+
 /// Implement OpenZeppelin NonFungibleToken trait
 #[default_impl]
 #[contractimpl]
 impl NonFungibleToken for SpaceStellarNFT {
-    type ContractType = Base;
+    type ContractType = SpaceStellarNFTContractOverrides;
 }
 
 /// Implement OpenZeppelin Ownable trait

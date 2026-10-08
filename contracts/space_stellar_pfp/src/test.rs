@@ -2,44 +2,26 @@
 
 extern crate std;
 
-use super::SpaceStellarNFT;
-use crate::SpaceStellarNFTClient;
+use super::SpaceStellarPFP;
+use crate::SpaceStellarPFPClient;
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
-    Address, Env, String, TryFromVal,
+    Address, Env, TryFromVal, Val, Vec,
 };
 
-fn deploy<'a>(env: &'a Env) -> SpaceStellarNFTClient<'a> {
+fn deploy<'a>(env: &'a Env) -> SpaceStellarPFPClient<'a> {
     let owner = Address::generate(env);
-    let contract_id = env.register(SpaceStellarNFT, (owner,));
-    SpaceStellarNFTClient::new(env, &contract_id)
+    let contract_id = env.register(SpaceStellarPFP, (owner,));
+    SpaceStellarPFPClient::new(env, &contract_id)
 }
 
-fn mint_ship(env: &Env, client: &SpaceStellarNFTClient, to: &Address) -> u32 {
-    client.mint(
-        to,
-        &String::from_str(env, "Fighter"),
-        &String::from_str(env, "Common"),
-        &String::from_str(env, "Elite"),
-        &10u32,
-        &8u32,
-        &12u32,
-        &String::from_str(env, "QmTest123"),
-        &String::from_str(env, "ipfs://QmTest123"),
-    )
-}
-
-fn topic_u32(env: &Env, topics: &soroban_sdk::Vec<soroban_sdk::Val>, index: u32) -> Option<u32> {
+fn topic_u32(env: &Env, topics: &Vec<Val>, index: u32) -> Option<u32> {
     topics
         .get(index)
         .and_then(|v| u32::try_from_val(env, &v).ok())
 }
 
-fn topic_address(
-    env: &Env,
-    topics: &soroban_sdk::Vec<soroban_sdk::Val>,
-    index: u32,
-) -> Option<Address> {
+fn topic_address(env: &Env, topics: &Vec<Val>, index: u32) -> Option<Address> {
     topics
         .get(index)
         .and_then(|v| Address::try_from_val(env, &v).ok())
@@ -51,9 +33,8 @@ fn test_mint_emits_typed_event_with_token_id_and_owner() {
     let client = deploy(&env);
     let user = Address::generate(&env);
 
-    let token_id = mint_ship(&env, &client, &user);
+    let token_id = client.mint(&user);
 
-    // Read the event log for the `mint` invocation before any other call.
     let events = env.events().all();
     let found = events.iter().any(|(_contract, topics, _data)| {
         topics.len() >= 3
@@ -74,7 +55,7 @@ fn test_transfer_emits_typed_event_with_from_and_to() {
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
-    let token_id = mint_ship(&env, &client, &alice);
+    let token_id = client.mint(&alice);
 
     client.transfer(&alice, &bob, &token_id);
     let events = env.events().all();
