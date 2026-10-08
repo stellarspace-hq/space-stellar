@@ -3,6 +3,7 @@ import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
 import { CONTRACT_ID } from '../contracts/config'
+import { getShipDefinition, getShipImage } from '../constants/ships'
 import './Collection.css'
 
 interface Ship {
@@ -104,75 +105,18 @@ const Collection = () => {
           
           // PERBAIKAN: Process backend data dengan mapping yang SAMA seperti Home.tsx
           const processedShips: Ship[] = response.data.ships.map((item: any) => {
-            // Map rarity to ship name, class, and stats
-            const rarityToName: { [key: string]: string } = {
-              'Common': 'Elite Fighter',
-              'Epic': 'Epic Destroyer',
-              'Legendary': 'Legendary Cruiser',
-              'Master': 'Master Battleship',
-              'Ultra': 'Ultra Command'
-            }
-            
-            const rarityToClass: { [key: string]: string } = {
-              'Common': 'Fighter', // Elite Fighter
-              'Epic': 'Destroyer', // Epic Destroyer
-              'Legendary': 'Cruiser', // Legendary Cruiser
-              'Master': 'Battleship', // Master Battleship
-              'Ultra': 'Command' // Ultra Command
-            }
-            
-            const rarityToStats: { [key: string]: { attack: number; speed: number; shield: number } } = {
-              'Common': { attack: 10, speed: 8, shield: 12 },
-              'Epic': { attack: 20, speed: 6, shield: 18 },
-              'Legendary': { attack: 30, speed: 15, shield: 25 },
-              'Master': { attack: 40, speed: 12, shield: 35 },
-              'Ultra': { attack: 50, speed: 18, shield: 45 }
-            }
-            
-            // PERBAIKAN: Gunakan logic yang SAMA dengan Home.tsx dan blockchain processing
-            // Step 1: Tentukan tier (prioritaskan tier dari backend, fallback ke rarity)
-            const tier = item.tier || item.rarity || 'Classic'
-            
-            // Step 2: Map tier ke rarity untuk display (sama seperti Home.tsx)
-            let displayRarity: string
-            if (tier === 'Elite') {
-              displayRarity = 'Common' // Elite Fighter menggunakan Common rarity
-            } else if (tier && ['Epic', 'Legendary', 'Master', 'Ultra'].includes(tier)) {
-              displayRarity = tier // Epic, Legendary, Master, Ultra sama dengan tier
-            } else {
-              displayRarity = tier || 'Common' // Fallback
-            }
-            
-            // Step 3: Tentukan class berdasarkan displayRarity
-            const finalClass = rarityToClass[displayRarity] || item.class || 'Fighter'
-            
-            // Step 4: Final tier untuk equip (gunakan tier yang sudah ditentukan)
-            const finalTier = tier
-            
-            const stats = rarityToStats[displayRarity] || rarityToStats['Common']
-            
-            // Determine ship name berdasarkan displayRarity
-            let shipName = rarityToName[displayRarity] || item.name || `Ship #${item.tokenId}`
-            
-            // Double check untuk Elite Fighter (sama seperti Home.tsx)
-            if (tier === 'Elite' || displayRarity === 'Common') {
-              shipName = 'Elite Fighter'
-            }
-            
-            console.log(`📦 Processing Backend Ship ${item.tokenId}:`)
-            console.log(`   📥 Backend data: tier="${item.tier}", rarity="${item.rarity}", class="${item.class}"`)
-            console.log(`   🔄 Calculated: tier="${tier}", displayRarity="${displayRarity}"`)
-            console.log(`   ✅ Final: tier="${finalTier}", rarity="${displayRarity}", class="${finalClass}", name="${shipName}"`)
-            
+            // Name/class/rarity/stats all resolve through the shared table.
+            const definition = getShipDefinition(item.tier || item.rarity)
+
             return {
               tokenId: item.tokenId,
-              name: shipName,
-              class: finalClass,
-              rarity: displayRarity,
-              tier: finalTier,
-              attack: stats.attack,
-              speed: stats.speed,
-              shield: stats.shield
+              name: definition.name,
+              class: definition.className,
+              rarity: definition.rarity,
+              tier: definition.tier,
+              attack: definition.stats.attack,
+              speed: definition.stats.speed,
+              shield: definition.stats.shield
             }
           })
           
@@ -209,90 +153,18 @@ const Collection = () => {
       
       // Convert to Ship format
       const shipsData: Ship[] = collection.map((item) => {
-        // Map rarity to ship name, class, and stats
-        const rarityToName: { [key: string]: string } = {
-          'Common': 'Elite Fighter',
-          'Epic': 'Epic Destroyer',
-          'Legendary': 'Legendary Cruiser',
-          'Master': 'Master Battleship',
-          'Ultra': 'Ultra Command'
-        }
-        
-        const rarityToClass: { [key: string]: string } = {
-          'Common': 'Fighter', // Elite Fighter
-          'Epic': 'Destroyer', // Epic Destroyer
-          'Legendary': 'Cruiser', // Legendary Cruiser
-          'Master': 'Battleship', // Master Battleship
-          'Ultra': 'Command' // Ultra Command
-        }
-        
-        const rarityToStats: { [key: string]: { attack: number; speed: number; shield: number } } = {
-          'Common': { attack: 10, speed: 8, shield: 12 },
-          'Epic': { attack: 20, speed: 6, shield: 18 },
-          'Legendary': { attack: 30, speed: 15, shield: 25 },
-          'Master': { attack: 40, speed: 12, shield: 35 },
-          'Ultra': { attack: 50, speed: 18, shield: 45 }
-        }
-        
-        // PERBAIKAN: Gunakan logic yang SAMA dengan Home.tsx untuk sinkronisasi
-        // Home.tsx: const tier = item.tier || rarity
-        // Home.tsx: if (tier === 'Elite') mappedRarity = 'Common'
-        // Home.tsx: else if (tier in ['Epic', 'Legendary', 'Master', 'Ultra']) mappedRarity = tier
-        
-        // Step 1: Tentukan tier (prioritaskan tier dari contract, fallback ke rarity)
-        const tier = item.tier || item.rarity || 'Classic'
-        
-        // Step 2: Map tier ke rarity untuk display (sama seperti Home.tsx)
-        let displayRarity: string
-        if (tier === 'Elite') {
-          displayRarity = 'Common' // Elite Fighter menggunakan Common rarity
-        } else if (tier && ['Epic', 'Legendary', 'Master', 'Ultra'].includes(tier)) {
-          displayRarity = tier // Epic, Legendary, Master, Ultra sama dengan tier
-        } else {
-          displayRarity = tier || 'Common' // Fallback
-        }
-        
-        // Step 3: Tentukan class berdasarkan displayRarity
-        const finalClass = rarityToClass[displayRarity] || item.class || 'Fighter'
-        
-        // Step 4: Final tier untuk equip (gunakan tier yang sudah ditentukan)
-        const finalTier = tier
-        
-        const stats = rarityToStats[displayRarity] || rarityToStats['Common']
-        
-        // Determine ship name berdasarkan displayRarity
-        let shipName = rarityToName[displayRarity] || `Ship #${item.tokenId}`
-        
-        // Double check untuk Elite Fighter (sama seperti Home.tsx)
-        if (tier === 'Elite' || displayRarity === 'Common') {
-          shipName = 'Elite Fighter'
-        }
-        
-        console.log(`📦 Processing Ship ${item.tokenId}:`)
-        console.log(`   📥 Contract data:`)
-        console.log(`      tier="${item.tier}" (${item.tier ? 'exists' : 'null/undefined'})`)
-        console.log(`      rarity="${item.rarity}" (${item.rarity ? 'exists' : 'null/undefined'})`)
-        console.log(`      class="${item.class}" (${item.class ? 'exists' : 'null/undefined'})`)
-        console.log(`   🔄 Calculated:`)
-        console.log(`      tier="${tier}" (from: ${item.tier ? 'item.tier' : item.rarity ? 'item.rarity' : 'default'})`)
-        console.log(`      displayRarity="${displayRarity}"`)
-        console.log(`   ✅ Final mapping:`)
-        console.log(`      tier="${finalTier}"`)
-        console.log(`      rarity="${displayRarity}"`)
-        console.log(`      class="${finalClass}"`)
-        console.log(`      name="${shipName}"`)
-        console.log(`      stats: attack=${stats.attack}, speed=${stats.speed}, shield=${stats.shield}`)
-        
+        // Name/class/rarity/stats all resolve through the shared table.
+        const definition = getShipDefinition(item.tier || item.rarity)
+
         return {
           tokenId: item.tokenId,
-          name: shipName,
-          class: finalClass, // PERBAIKAN: Gunakan finalClass yang sudah di-map, bukan item.class
-          rarity: displayRarity, // PERBAIKAN: Gunakan displayRarity, bukan item.rarity
-          tier: finalTier, // PERBAIKAN: Simpan tier yang benar untuk equip
-          attack: stats.attack,
-          speed: stats.speed,
-          shield: stats.shield
-          // PERBAIKAN: Jangan set image dari contract, biarkan getShipImagePath() yang menentukan berdasarkan rarity
+          name: definition.name,
+          class: definition.className,
+          rarity: definition.rarity,
+          tier: definition.tier,
+          attack: definition.stats.attack,
+          speed: definition.stats.speed,
+          shield: definition.stats.shield
         }
       })
       
@@ -320,30 +192,6 @@ const Collection = () => {
       case 'Ultra': return '#ffd700' // Gold for Ultra
       default: return '#ffffff'
     }
-  }
-
-  const getShipImage = (rarity: string) => {
-    // Map rarity to GIF file
-    const imageMap: { [key: string]: string } = {
-      'Common': '/nft-images/ships/ship-elite.gif',
-      'Rare': '/nft-images/ships/ship-epic.gif',
-      'Epic': '/nft-images/ships/ship-legendary.gif',
-      'Legendary': '/nft-images/ships/ship-master.gif',
-      'Mythic': '/nft-images/ships/ship-ultra.gif'
-    };
-    
-    return imageMap[rarity] || '/nft-images/ships/ship-elite.gif';
-  }
-
-  const getShipImagePath = (rarity: string) => {
-    const rarityMap: { [key: string]: string } = {
-      'Common': '/nft-images/ships/ship-elite.gif',
-      'Epic': '/nft-images/ships/ship-epic.gif',
-      'Legendary': '/nft-images/ships/ship-legendary.gif',
-      'Master': '/nft-images/ships/ship-master.gif',
-      'Ultra': '/nft-images/ships/ship-ultra.gif'
-    };
-    return rarityMap[rarity] || '/nft-images/ships/ship-classic.gif';
   }
 
   if (!address) {
@@ -394,7 +242,7 @@ const Collection = () => {
             {/* PERBAIKAN: Selalu gunakan rarity untuk gambar, jangan gunakan ship.image dari contract */}
             <div className="ship-image">
               <img 
-                src={getShipImagePath(ship.rarity)}
+                src={getShipImage(ship.rarity)}
                 alt={ship.name}
                 onError={(e) => {
                   // Fallback to emoji if image fails

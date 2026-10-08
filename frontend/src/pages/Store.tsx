@@ -4,6 +4,7 @@ import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
 import SuccessModal from '../components/SuccessModal'
+import { SHIP_TABLE } from '../constants/ships'
 import './Store.css'
 
 interface ShipTemplate {
@@ -35,68 +36,29 @@ const Store = () => {
 
   useEffect(() => {
     // Load ship templates - 5 NFT tiers (Classic tidak ada di store, default untuk semua)
-    const templates: ShipTemplate[] = [
-      {
-        id: 1,
-        name: 'Elite Fighter',
-        class: 'Fighter',
-        rarity: 'Common',
-        tier: 'Elite',
-        attack: 10,
-        speed: 8,
-        shield: 12,
-        price: 10, // Elite Fighter price: 10 Points
-        image: '/nft-images/ships/ship-elite.gif'
-      },
-      {
-        id: 2,
-        name: 'Epic Destroyer',
-        class: 'Destroyer',
-        rarity: 'Epic',
-        tier: 'Epic',
-        attack: 20,
-        speed: 6,
-        shield: 18,
-        price: 50,
-        image: '/nft-images/ships/ship-epic.gif'
-      },
-      {
-        id: 3,
-        name: 'Legendary Cruiser',
-        class: 'Cruiser',
-        rarity: 'Legendary',
-        tier: 'Legendary',
-        attack: 30,
-        speed: 15,
-        shield: 25,
-        price: 100,
-        image: '/nft-images/ships/ship-legendary.gif'
-      },
-      {
-        id: 4,
-        name: 'Master Battleship',
-        class: 'Battleship',
-        rarity: 'Master',
-        tier: 'Master',
-        attack: 40,
-        speed: 12,
-        shield: 35,
-        price: 200,
-        image: '/nft-images/ships/ship-master.gif'
-      },
-      {
-        id: 5,
-        name: 'Ultra Command',
-        class: 'Command',
-        rarity: 'Ultra',
-        tier: 'Ultra',
-        attack: 50,
-        speed: 18,
-        shield: 45,
-        price: 500,
-        image: '/nft-images/ships/ship-ultra.gif'
-      }
-    ]
+    // Name/class/rarity/tier/stats/image all come from the shared rarity table;
+    // only the point price is store-specific.
+    const SHIP_PRICES: { [key: string]: number } = {
+      Common: 10, // Elite Fighter
+      Epic: 50,
+      Legendary: 100,
+      Master: 200,
+      Ultra: 500
+    }
+    const templates: ShipTemplate[] = SHIP_TABLE
+      .filter(definition => definition.rarity !== 'Classic')
+      .map((definition, index) => ({
+        id: index + 1,
+        name: definition.name,
+        class: definition.className,
+        rarity: definition.rarity,
+        tier: definition.tier,
+        attack: definition.stats.attack,
+        speed: definition.stats.speed,
+        shield: definition.stats.shield,
+        price: SHIP_PRICES[definition.rarity] ?? 0,
+        image: definition.image
+      }))
     setShips(templates)
   }, [])
 

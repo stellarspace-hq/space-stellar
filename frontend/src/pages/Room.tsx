@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
+import { getShipImage, getShipName } from '../constants/ships'
 import './Room.css'
 
 interface RoomData {
@@ -601,27 +602,6 @@ const Room = () => {
     }
   }
 
-  const getShipImage = (rarity: string) => {
-    // PERBAIKAN: Normalisasi "Common" menjadi "Elite" untuk mapping yang benar
-    const normalizedRarity = rarity === 'Common' ? 'Elite' : rarity
-    const imageMap: { [key: string]: string } = {
-      'Classic': '/nft-images/ships/ship-classic.gif',
-      'Common': '/nft-images/ships/ship-elite.gif',
-      'Elite': '/nft-images/ships/ship-elite.gif',
-      'Epic': '/nft-images/ships/ship-epic.gif',
-      'Legendary': '/nft-images/ships/ship-legendary.gif',
-      'Master': '/nft-images/ships/ship-master.gif',
-      'Ultra': '/nft-images/ships/ship-ultra.gif'
-    }
-    return imageMap[normalizedRarity] || '/nft-images/ships/ship-classic.gif'
-  }
-  
-  // PERBAIKAN: Helper function untuk mendapatkan ship name yang benar
-  const getShipName = (rarity: string) => {
-    // Normalisasi "Common" menjadi "Elite" untuk name yang benar
-    const normalizedRarity = rarity === 'Common' ? 'Elite' : rarity
-    return `${normalizedRarity} Fighter`
-  }
 
   const getAvatar = (address: string) => {
     // Generate avatar from address (simple approach)

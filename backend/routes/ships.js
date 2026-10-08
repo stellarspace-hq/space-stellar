@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import { pool } from '../server.js';
+import { getShipImage, getShipName } from '../utils/shipRarity.js';
 
 const router = express.Router();
 
@@ -248,26 +249,11 @@ router.get('/collection/:address', async (req, res) => {
       [address]
     );
 
-    // Format ships with names and images based on rarity/tier
+    // Format ships with names and images resolved through the shared table.
     const ships = result.rows.map(ship => {
-      // Determine image based on rarity
-      let image = getShipImage(ship.rarity);
-      
-      // Map ship names based on tier/rarity
-      // Elite Fighter: tier='Elite', rarity='Common'
-      let shipName = `${ship.class} ${ship.rarity}`;
-      if (ship.tier === 'Elite' || (ship.rarity === 'Common' && ship.tier === 'Elite')) {
-        shipName = 'Elite Fighter';
-      } else if (ship.rarity === 'Epic') {
-        shipName = 'Epic Destroyer';
-      } else if (ship.rarity === 'Legendary') {
-        shipName = 'Legendary Cruiser';
-      } else if (ship.rarity === 'Master') {
-        shipName = 'Master Battleship';
-      } else if (ship.rarity === 'Ultra') {
-        shipName = 'Ultra Command';
-      }
-      
+      const image = getShipImage(ship.tier || ship.rarity);
+      const shipName = getShipName(ship.tier || ship.rarity);
+
       return {
         ...ship,
         name: shipName,
@@ -302,31 +288,6 @@ router.get('/:tokenId', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-function getShipImage(rarity) {
-  // Map rarity to GIF file
-  const imageMap = {
-    'Common': '/nft-images/ships/ship-elite.gif',
-    'Epic': '/nft-images/ships/ship-epic.gif',
-    'Legendary': '/nft-images/ships/ship-legendary.gif',
-    'Master': '/nft-images/ships/ship-master.gif',
-    'Ultra': '/nft-images/ships/ship-ultra.gif'
-  };
-  
-  return imageMap[rarity] || '/nft-images/ships/ship-classic.gif';
-}
-
-// Helper untuk get ship image path berdasarkan rarity
-function getShipImagePath(rarity) {
-  const rarityMap = {
-    'Common': '/nft-images/ships/ship-elite.gif',
-    'Epic': '/nft-images/ships/ship-epic.gif',
-    'Legendary': '/nft-images/ships/ship-legendary.gif',
-    'Master': '/nft-images/ships/ship-master.gif',
-    'Ultra': '/nft-images/ships/ship-ultra.gif'
-  };
-  return rarityMap[rarity] || '/nft-images/ships/ship-classic.gif';
-}
 
 export default router;
 

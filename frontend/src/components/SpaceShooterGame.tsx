@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import axios from 'axios'
 import { getSocket, disconnectSocket } from '../utils/socket'
 import type { Socket } from 'socket.io-client'
+import { getShipImage, getShipStats as getSharedShipStats } from '../constants/ships'
 import './SpaceShooterGame.css'
 
 interface GameObject {
@@ -162,19 +163,6 @@ const SpaceShooterGame = ({
   // Load ship image untuk Player 1 (host)
   useEffect(() => {
     // PERBAIKAN: Prioritaskan roomData.hostShip untuk multiplayer, fallback ke prop shipImage
-    const getShipImage = (rarity: string) => {
-      const imageMap: { [key: string]: string } = {
-        'Classic': '/nft-images/ships/ship-classic.gif',
-        'Common': '/nft-images/ships/ship-elite.gif',
-        'Elite': '/nft-images/ships/ship-elite.gif',
-        'Epic': '/nft-images/ships/ship-epic.gif',
-        'Legendary': '/nft-images/ships/ship-legendary.gif',
-        'Master': '/nft-images/ships/ship-master.gif',
-        'Ultra': '/nft-images/ships/ship-ultra.gif'
-      }
-      return imageMap[rarity] || '/nft-images/ships/ship-classic.gif'
-    }
-    
     let imageToLoad: string | null = null
     
     // PERBAIKAN: Untuk solo mode, SELALU gunakan ship dari prop (yang berasal dari localStorage)
@@ -234,19 +222,6 @@ const SpaceShooterGame = ({
   // PERBAIKAN: Load ship image untuk Player 2 (guest) dari roomData
   useEffect(() => {
     if (!isMultiplayer) return
-    
-    const getShipImage = (rarity: string) => {
-      const imageMap: { [key: string]: string } = {
-        'Classic': '/nft-images/ships/ship-classic.gif',
-        'Common': '/nft-images/ships/ship-elite.gif',
-        'Elite': '/nft-images/ships/ship-elite.gif',
-        'Epic': '/nft-images/ships/ship-epic.gif',
-        'Legendary': '/nft-images/ships/ship-legendary.gif',
-        'Master': '/nft-images/ships/ship-master.gif',
-        'Ultra': '/nft-images/ships/ship-ultra.gif'
-      }
-      return imageMap[rarity] || '/nft-images/ships/ship-classic.gif'
-    }
     
     let imageToLoad: string | null = null
     
@@ -317,7 +292,9 @@ const SpaceShooterGame = ({
     })
   }, [])
 
-  // Ship stats based on rarity (fallback if no propShipStats)
+  // Ship stats based on rarity (fallback if no propShipStats).
+  // attack/speed/shield/fireRate come from the shared rarity table; health is
+  // uniform (all ships have 100 HP).
   const getShipStats = (rarity: string, propStats?: { attack: number; speed: number; shield: number }) => {
     // Use prop stats if available (from NFT metadata)
     if (propStats) {
@@ -329,18 +306,15 @@ const SpaceShooterGame = ({
         fireRate: Math.max(50, 300 - propStats.speed * 10) // Faster speed = faster fire rate
       }
     }
-    
-    // Fallback stats based on rarity
-    const stats: { [key: string]: { attack: number; speed: number; shield: number; health: number; fireRate: number } } = {
-      'Classic': { attack: 5, speed: 5, shield: 5, health: 100, fireRate: 300 },
-      'Common': { attack: 10, speed: 8, shield: 12, health: 100, fireRate: 250 },
-      'Elite': { attack: 10, speed: 8, shield: 12, health: 100, fireRate: 250 },
-      'Epic': { attack: 20, speed: 6, shield: 18, health: 100, fireRate: 200 },
-      'Legendary': { attack: 30, speed: 15, shield: 25, health: 100, fireRate: 150 },
-      'Master': { attack: 40, speed: 12, shield: 35, health: 100, fireRate: 120 },
-      'Ultra': { attack: 50, speed: 18, shield: 45, health: 100, fireRate: 100 }
+
+    const shared = getSharedShipStats(rarity)
+    return {
+      attack: shared.attack,
+      speed: shared.speed,
+      shield: shared.shield,
+      health: 100,
+      fireRate: shared.fireRate
     }
-    return stats[rarity] || stats['Classic']
   }
 
   // PERBAIKAN: Gunakan shipRarity dari roomData untuk multiplayer, fallback ke prop
