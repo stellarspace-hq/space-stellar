@@ -19,11 +19,25 @@ router.post('/index', async (req, res) => {
     // Try to insert into database, but don't fail if database is not available
     let dbResult = null;
     if (pool) {
+      const client = await pool.connect();
       try {
-        // Insert ship into database
+        await client.query('BEGIN');
+
+        // `ships.owner_address` references `users(address)`, so the owning user
+        // must exist before the ship row is written. Doing both inside one
+        // transaction lets a first-time minter index their ship without a
+        // foreign-key violation, and rolls both rows back on any failure.
+        await client.query(
+          `INSERT INTO users (address, user_id, created_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (address) DO NOTHING`,
+          [address, `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`]
+        );
+
+        // Insert ship into database (upsert keeps a repeat index idempotent).
         // Include tier if available (for Elite Fighter: tier='Elite', rarity='Common')
         const tier = shipTemplate.tier || shipTemplate.rarity || null;
-        const result = await pool.query(
+        const result = await client.query(
           `INSERT INTO ships (
             token_id, owner_address, ipfs_cid, class, rarity, tier,
             attack, speed, shield, last_onchain_update
@@ -48,16 +62,13 @@ router.post('/index', async (req, res) => {
         );
         dbResult = result.rows[0];
 
-        // Ensure user exists
-        await pool.query(
-          `INSERT INTO users (address, user_id, created_at)
-           VALUES ($1, $2, NOW())
-           ON CONFLICT (address) DO NOTHING`,
-          [address, `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`]
-        );
+        await client.query('COMMIT');
       } catch (dbError) {
+        await client.query('ROLLBACK').catch(() => {});
         console.warn('⚠️  Database error (continuing with mock response):', dbError.message);
         // Continue without database
+      } finally {
+        client.release();
       }
     }
 
