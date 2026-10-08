@@ -4,6 +4,9 @@ import { randomUUID } from 'crypto';
 
 const router = express.Router();
 
+// UUID v4-style identifier used to deduplicate a match by the client's own id.
+const MATCH_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Submit match result
 router.post('/submit', async (req, res) => {
   try {
@@ -227,8 +230,17 @@ router.post('/save', async (req, res) => {
       shipRarity,
       shipName,
       score,
-      duration = 0
+      duration = 0,
+      matchId: clientMatchId,
+      gameId: clientGameId
     } = req.body;
+
+    // A client-supplied identifier uniquely names a match, so a genuine retry can
+    // be deduplicated without the fixed 10-second window suppressing a second,
+    // genuinely distinct match. Older clients that send nothing keep the window.
+    const suppliedMatchId = clientMatchId || clientGameId;
+    const hasSuppliedMatchId =
+      typeof suppliedMatchId === 'string' && MATCH_ID_PATTERN.test(suppliedMatchId);
 
     // Normalize mode value (trim, lowercase, validate)
     const normalizedMode = mode ? mode.toString().trim().toLowerCase() : 'solo';
@@ -298,10 +310,21 @@ router.post('/save', async (req, res) => {
       }
 
       console.log('🔄 Step 2: Checking for duplicate match...');
+
+      if (hasSuppliedMatchId) {
+        const existingById = await pool.query(
+          'SELECT * FROM matches WHERE match_id = $1',
+          [suppliedMatchId]
+        );
+        if (existingById.rows.length > 0) {
+          console.log('⚠️ Duplicate match detected (by match id), returning existing match:', suppliedMatchId);
+          return res.json({ success: true, match: existingById.rows[0], duplicate: true });
+        }
+      }
       // Check for duplicate match (same room_code, address, score within last 10 seconds)
       // This prevents duplicate saves from frontend retries or multiple calls
       // Increase time window to 10 seconds to catch all duplicates
-      if (roomCode) {
+      if (!hasSuppliedMatchId && roomCode) {
         const duplicateCheck = await pool.query(
           `SELECT match_id FROM matches 
            WHERE room_code = $1 
@@ -326,7 +349,7 @@ router.post('/save', async (req, res) => {
       
       // Also check for duplicate without room_code (fallback for games without room)
       // Same address and score within last 10 seconds (only if no room_code provided)
-      if (!roomCode) {
+      if (!hasSuppliedMatchId && !roomCode) {
         const duplicateCheckNoRoom = await pool.query(
           `SELECT match_id FROM matches 
            WHERE p1_address = $1 
@@ -350,7 +373,7 @@ router.post('/save', async (req, res) => {
       }
 
       console.log('🔄 Step 3: Inserting match...');
-      const matchId = randomUUID();
+      const matchId = hasSuppliedMatchId ? suppliedMatchId : randomUUID();
       // Generate seed for match (required field)
       const seed = Math.floor(Math.random() * 1000000);
       // Generate checksum for match (required field) - empty string for now
@@ -434,7 +457,7 @@ router.post('/save', async (req, res) => {
           );
           
           // Retry match insertion
-          const matchId = randomUUID();
+          const matchId = hasSuppliedMatchId ? suppliedMatchId : randomUUID();
           const seed = Math.floor(Math.random() * 1000000);
           const checksum = '';
           const matchResult = await pool.query(
