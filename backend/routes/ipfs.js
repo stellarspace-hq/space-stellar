@@ -255,16 +255,23 @@ router.post('/upload-metadata', async (req, res) => {
         ipfsUri: `ipfs://${metadataCid}`
       });
     } catch (pinataError) {
-      console.error('Pinata upload error:', pinataError.message);
-      // Return mock CID if Pinata fails
-      const mockCid = `Qm${Math.random().toString(36).substr(2, 44)}`;
-      res.json({
-        success: true,
-        metadataCid: mockCid,
-        metadataUrl: `https://gateway.pinata.cloud/ipfs/${mockCid}`,
-        metadata: metadata,
-        ipfsUri: `ipfs://${mockCid}`,
-        message: 'Mock CID (Pinata upload failed)'
+      // Never fabricate a CID: a pinning outage must surface to the caller so the
+      // frontend can retry instead of persisting an unresolvable token URI.
+      const requestId =
+        pinataError.response?.headers?.['x-request-id'] ||
+        pinataError.response?.data?.id ||
+        null;
+      console.error('Pinata upload error:', {
+        message: pinataError.message,
+        status: pinataError.response?.status,
+        requestId,
+        response: pinataError.response?.data
+      });
+      return res.status(502).json({
+        success: false,
+        code: 'PINATA_UNAVAILABLE',
+        message: 'Failed to upload metadata to IPFS (Pinata unavailable). Please retry.',
+        requestId
       });
     }
   } catch (error) {
