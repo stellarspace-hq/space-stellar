@@ -3,6 +3,14 @@
 
 import express from 'express';
 import { pool } from '../server.js';
+import {
+  ADD_POINTS_SQL,
+  DEDUCT_POINTS_SQL,
+  evaluateDeduction,
+  ledgerParams,
+  parseStoredPoints,
+  validateAmount,
+} from '../utils/pointsLedger.js';
 
 const router = express.Router();
 
@@ -35,7 +43,7 @@ router.get('/:address', async (req, res) => {
       });
     }
 
-    const points = parseInt(result.rows[0].points) || 2000;
+    const points = parseStoredPoints(result.rows[0].points);
 
     res.json({
       success: true,
@@ -56,19 +64,18 @@ router.post('/deduct', async (req, res) => {
   try {
     const { address, amount, reason } = req.body;
 
-    if (!address || !amount) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Address and amount required' 
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: 'Address and amount required'
       });
     }
 
-    if (amount <= 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Amount must be greater than 0' 
-      });
+    const amountCheck = validateAmount(amount);
+    if (!amountCheck.ok) {
+      return res.status(amountCheck.status).json(amountCheck.body);
     }
+    const amountValue = amountCheck.amount;
 
     if (!pool) {
       return res.status(503).json({ 
@@ -94,28 +101,19 @@ router.post('/deduct', async (req, res) => {
       );
       console.log(`✅ New user created with welcome bonus: 2000 points`);
     } else {
-      currentPoints = parseInt(userCheck.rows[0].points) || 2000;
+      currentPoints = parseStoredPoints(userCheck.rows[0].points);
     }
 
     // Check if user has enough points
-    if (currentPoints < amount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient points',
-        currentPoints,
-        required: amount,
-        shortage: amount - currentPoints
-      });
+    const deduction = evaluateDeduction(currentPoints, amountValue);
+    if (!deduction.ok) {
+      return res.status(deduction.status).json(deduction.body);
     }
 
     // Deduct points
     const result = await pool.query(
-      `UPDATE users 
-       SET points = points - $1,
-           updated_at = NOW()
-       WHERE address = $2
-       RETURNING points`,
-      [amount, address]
+      DEDUCT_POINTS_SQL,
+      ledgerParams(amountValue, address)
     );
 
     if (result.rows.length === 0) {
@@ -130,9 +128,9 @@ router.post('/deduct', async (req, res) => {
     res.json({
       success: true,
       points: newPoints,
-      deducted: amount,
+      deducted: amountValue,
       reason: reason || 'Mint NFT',
-      message: `Successfully deducted ${amount} points`
+      message: `Successfully deducted ${amountValue} points`
     });
   } catch (error) {
     console.error('Error deducting points:', error);
@@ -148,19 +146,18 @@ router.post('/add', async (req, res) => {
   try {
     const { address, amount, reason } = req.body;
 
-    if (!address || !amount) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Address and amount required' 
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: 'Address and amount required'
       });
     }
 
-    if (amount <= 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Amount must be greater than 0' 
-      });
+    const amountCheck = validateAmount(amount);
+    if (!amountCheck.ok) {
+      return res.status(amountCheck.status).json(amountCheck.body);
     }
+    const amountValue = amountCheck.amount;
 
     if (!pool) {
       return res.status(503).json({ 
@@ -188,12 +185,8 @@ router.post('/add', async (req, res) => {
 
     // Add points
     const result = await pool.query(
-      `UPDATE users 
-       SET points = points + $1,
-           updated_at = NOW()
-       WHERE address = $2
-       RETURNING points`,
-      [amount, address]
+      ADD_POINTS_SQL,
+      ledgerParams(amountValue, address)
     );
 
     if (result.rows.length === 0) {
@@ -208,9 +201,9 @@ router.post('/add', async (req, res) => {
     res.json({
       success: true,
       points: newPoints,
-      added: amount,
+      added: amountValue,
       reason: reason || 'Reward',
-      message: `Successfully added ${amount} points`
+      message: `Successfully added ${amountValue} points`
     });
   } catch (error) {
     console.error('Error adding points:', error);
