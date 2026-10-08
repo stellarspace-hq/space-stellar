@@ -241,11 +241,7 @@ NODE_ENV=development
 STELLAR_NETWORK=testnet
 SOROBAN_RPC_URL=https://soroban-rpc.testnet.stellar.org
 
-# Contract IDs (fill after deployment)
-CONTRACT_ID=your_nft_contract_id
-PFP_CONTRACT_ID=your_pfp_contract_id
-
-# Database (optional)
+# Database
 DATABASE_URL=postgresql://user:password@localhost:5432/space_stellar
 
 # JWT Secret
@@ -253,8 +249,10 @@ DATABASE_URL=postgresql://user:password@localhost:5432/space_stellar
 # IPFS (if using Pinata)
 PINATA_API_KEY=your_pinata_api_key
 PINATA_SECRET_KEY=your_pinata_secret_key
+PINATA_JWT=your_pinata_jwt
 
-# Contract Owner (for PFP minting)
+# PFP Contract & Owner (for PFP minting)
+PFP_CONTRACT_ID=your_pfp_contract_id
 PFP_CONTRACT_OWNER_SECRET=your_owner_secret_key_here
 ```
 
