@@ -1,0 +1,92 @@
+name: Publish Contract to Registry
+
+# Manual, protected contract publishing.
+#
+# This workflow is intentionally NOT triggered by push or pull_request: it can
+# spend real XLM and mutate the on-chain registry. The `publish` job runs in the
+# `contract-registry` Environment, which must be configured in repository
+# settings with required reviewers so a human approves every publish. The
+# `publish` job cannot start until the `build` job that compiles the canonical
+# workspace contract has succeeded.
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: Stellar network to publish to
+        required: true
+        default: testnet
+        type: choice
+        options:
+        - testnet
+        - mainnet
+      binver:
+        description: Binary version to publish (semver)
+        required: true
+        default: "1.0.0"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: 1.89.0
+
+jobs:
+  build:
+    name: Build canonical workspace contract
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@166de8caa14bb03d0e4ce3de7cc787f95ccf7188 # 1.89.0
+      with:
+        toolchain: ${{ env.RUST_VERSION }}
+        targets: wasm32v1-none
+    - name: Build the canonical space_stellar_nft crate
+      run: cargo build --release --target wasm32v1-none --package space_stellar_nft
+    - name: Verify the wasm artifact exists
+      run: |
+        set -euo pipefail
+        wasm="target/wasm32v1-none/release/space_stellar_nft.wasm"
+        if [ ! -f "$wasm" ]; then
+          echo "::error::Expected wasm artifact at $wasm was not produced by the build."
+          exit 1
+        fi
+        echo "Built $wasm ($(wc -c < "$wasm") bytes)"
+    - name: Upload wasm artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: space_stellar_nft-wasm
+        path: target/wasm32v1-none/release/space_stellar_nft.wasm
+        if-no-files-found: error
+
+  publish:
+    name: Publish space_stellar_nft to the registry
+    needs: build
+    runs-on: ubuntu-latest
+    # Required reviewers are configured on this Environment in repository settings.
+    environment: contract-registry
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+    - name: Download the built wasm artifact
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      with:
+        name: space_stellar_nft-wasm
+        path: wasm
+    - name: Install Stellar CLI
+      run: |
+        set -euo pipefail
+        cargo install --locked stellar-cli
+    - name: Publish the contract binary
+      run: |
+        set -euo pipefail
+        wasm="wasm/space_stellar_nft.wasm"
+        if [ ! -f "$wasm" ]; then
+          echo "::error::Missing artifact $wasm. The build job did not upload it; nothing was published."
+          exit 1
+        fi
+        stellar registry publish \
+          --wasm "$wasm" \
+          --wasm-name space-stellar-nft \
+          --binver "${{ inputs.binver }}" \
+          --network "${{ inputs.network }}"
