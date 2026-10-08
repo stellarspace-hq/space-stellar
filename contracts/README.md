@@ -170,19 +170,21 @@ pub fn get_metadata_uri(e: &Env, token_id: u32) -> Option<String>
 
 The contract implements:
 
-**`NonFungibleToken`** trait:
-- `balance(e, owner) -> u32`
-- `owner_of(e, token_id) -> Option<Address>`
-- `transfer(e, from, to, token_id)`
-- `approve(e, from, operator, token_id)`
-- `get_approved(e, token_id) -> Option<Address>`
-- `set_approval_for_all(e, from, operator, approved)`
-- `is_approved_for_all(e, owner, operator) -> bool`
+**`NonFungibleToken`** trait (OpenZeppelin Stellar Contracts v0.5.1):
+- `balance(e: &Env, account: Address) -> u32`
+- `owner_of(e: &Env, token_id: u32) -> Address`
+- `transfer(e: &Env, from: Address, to: Address, token_id: u32)`
+- `transfer_from(e: &Env, spender: Address, from: Address, to: Address, token_id: u32)`
+- `approve(e: &Env, approver: Address, approved: Address, token_id: u32, live_until_ledger: u32)`
+- `approve_for_all(e: &Env, owner: Address, operator: Address, live_until_ledger: u32)`
+- `get_approved(e: &Env, token_id: u32) -> Option<Address>`
+- `is_approved_for_all(e: &Env, owner: Address, operator: Address) -> bool`
 
-**`Ownable`** trait:
-- `owner(e) -> Address`
-- `transfer_ownership(e, new_owner)`
-- `renounce_ownership(e)`
+**`Ownable`** trait (OpenZeppelin Stellar Contracts v0.5.1):
+- `get_owner(e: &Env) -> Option<Address>`
+- `transfer_ownership(e: &Env, new_owner: Address, live_until_ledger: u32)`
+- `accept_ownership(e: &Env)`
+- `renounce_ownership(e: &Env)`
 
 ### Building
 

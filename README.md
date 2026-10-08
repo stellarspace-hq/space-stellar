@@ -356,12 +356,44 @@ This project uses **2 smart contracts** deployed using **Scaffold Stellar Regist
 #### Main Functions
 
 ```rust
-// Get ship metadata
+// Get ship metadata. Every custom getter takes the token ID as a u32.
 pub fn get_ship_class(e: &Env, token_id: u32) -> Option<String>
 pub fn get_ship_rarity(e: &Env, token_id: u32) -> Option<String>
 pub fn get_ship_tier(e: &Env, token_id: u32) -> Option<String>
 pub fn get_ipfs_cid(e: &Env, token_id: u32) -> Option<String>
 pub fn get_metadata_uri(e: &Env, token_id: u32) -> Option<String>
+
+// Standard NonFungibleToken functions (OpenZeppelin Stellar Contracts v0.5.1),
+// exposed through `Base` and using the same u32 token ID.
+pub fn balance(e: &Env, account: Address) -> u32
+pub fn owner_of(e: &Env, token_id: u32) -> Address
+```
+
+**Runnable Example**
+
+From `frontend/src/`, using the contract client at `frontend/src/contracts/client.ts`.
+`mint` resolves with the new token ID (`u32` on-chain, `number` in TypeScript), and
+every getter — including `owner_of` — takes that same `u32` token ID:
+
+```typescript
+import { SpaceStellarNFTClient } from './contracts/client'
+
+const client = new SpaceStellarNFTClient()
+
+const { tokenId } = await client.mint(
+  signer,        // (xdr: string) => Promise<string>
+  sourceAccount, // account paying the transaction fee
+  to,            // recipient Address
+  'Elite',       // class
+  'Common',      // rarity
+  'Tier 1',      // tier
+  10, 8, 12,     // attack, speed, shield (u32)
+  'QmExample...',        // ipfs_cid
+  'ipfs://QmExample...'  // metadata_uri
+)
+
+const shipClass = await client.getShipClass(tokenId)
+const owner = await client.ownerOf(tokenId)
 ```
 
 ### 🎨 Contract 2: Space Stellar PFP (`space_stellar_pfp`)
