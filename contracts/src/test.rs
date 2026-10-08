@@ -1,34 +1,34 @@
 #![cfg(test)]
 
+extern crate std;
+
 use super::SpaceStellarNFT;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use crate::{ShipMetadata, SpaceStellarNFTClient};
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    Address, Env, String, Symbol, TryFromVal,
+};
+
+fn deploy<'a>(env: &'a Env) -> (Address, SpaceStellarNFTClient<'a>) {
+    let owner = Address::generate(env);
+    let contract_id = env.register(SpaceStellarNFT, (owner.clone(),));
+    (owner, SpaceStellarNFTClient::new(env, &contract_id))
+}
 
 #[test]
 fn test_constructor() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, SpaceStellarNFT);
-    let client = SpaceStellarNFTClient::new(&env, &contract_id);
+    let (owner, client) = deploy(&env);
 
-    let owner = Address::generate(&env);
-
-    client.__constructor(&owner);
-
-    // Test that owner is set using OpenZeppelin's owner function
-    let contract_owner = client.owner();
-    assert_eq!(contract_owner, owner);
+    assert_eq!(client.get_owner(), Some(owner));
 }
 
 #[test]
-fn test_mint() {
+fn test_mint_metadata_round_trip_and_event() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, SpaceStellarNFT);
-    let client = SpaceStellarNFTClient::new(&env, &contract_id);
+    let (_owner, client) = deploy(&env);
 
-    let owner = Address::generate(&env);
     let user = Address::generate(&env);
-
-    // Initialize contract
-    client.__constructor(&owner);
 
     let class = String::from_str(&env, "Fighter");
     let rarity = String::from_str(&env, "Common");
@@ -36,8 +36,7 @@ fn test_mint() {
     let ipfs_cid = String::from_str(&env, "QmTest123");
     let metadata_uri = String::from_str(&env, "ipfs://QmTest123");
 
-    // Mint as owner (only owner can mint)
-    client.mint(
+    let token_id = client.mint(
         &user,
         &class,
         &rarity,
@@ -49,19 +48,45 @@ fn test_mint() {
         &metadata_uri,
     );
 
-    // Check ownership using OpenZeppelin's owner_of
-    // Sequential mint starts at 1
-    let token_id = 1u128;
-    let owner_result = client.owner_of(&token_id);
-    assert_eq!(owner_result, Some(user));
+    // Read the event log for the mint invocation before any other call.
+    let events = env.events().all();
 
-    // Check custom metadata
-    let ship_class = client.get_ship_class(&token_id);
-    assert_eq!(ship_class, Some(class));
+    // The token-ID type used here (u32) matches the contract signature.
+    assert_eq!(client.owner_of(&token_id), user.clone());
 
-    let ship_rarity = client.get_ship_rarity(&token_id);
-    assert_eq!(ship_rarity, Some(rarity));
+    // Every metadata field written by `mint` round-trips.
+    let expected = ShipMetadata {
+        class: class.clone(),
+        rarity: rarity.clone(),
+        tier: tier.clone(),
+        attack: 10u32,
+        speed: 8u32,
+        shield: 12u32,
+        ipfs_cid: ipfs_cid.clone(),
+        metadata_uri: metadata_uri.clone(),
+    };
+    assert_eq!(client.get_ship_metadata(&token_id), Some(expected));
+    assert_eq!(client.get_ship_class(&token_id), Some(class));
+    assert_eq!(client.get_ipfs_cid(&token_id), Some(ipfs_cid));
 
-    let ipfs_result = client.get_ipfs_cid(&token_id);
-    assert_eq!(ipfs_result, Some(ipfs_cid));
+    // The mint event topics are asserted.
+    let mint_symbol = Symbol::new(&env, "mint");
+    let found = events.iter().any(|(_contract, topics, _data)| {
+        if topics.len() < 2 {
+            return false;
+        }
+        let topic0 = Symbol::try_from_val(&env, &topics.get(0).unwrap());
+        let topic1 = Address::try_from_val(&env, &topics.get(1).unwrap());
+        topic0.map(|s| s == mint_symbol).unwrap_or(false)
+            && topic1.map(|a| a == user).unwrap_or(false)
+    });
+    assert!(found, "expected a mint event with topics [mint, recipient]");
+}
+
+#[test]
+fn test_get_ship_metadata_for_unminted_token_is_none() {
+    let env = Env::default();
+    let (_owner, client) = deploy(&env);
+
+    assert_eq!(client.get_ship_metadata(&42u32), None);
 }

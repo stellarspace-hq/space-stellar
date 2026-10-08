@@ -1,37 +1,21 @@
-[workspace]
 [package]
 name = "space-stellar-nft"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["std"]
-std = [
-    "soroban-sdk/std",
-    "soroban-token-sdk/std",
-]
+std = []
 
 [dependencies]
-soroban-sdk = "21.0.0"
-soroban-token-sdk = "21.0.0"
-stellar-access = { version = "^0.4.1", features = ["ownable"] }
-stellar-tokens = { version = "^0.4.1", features = ["non-fungible"] }
-stellar-macros = "^0.4.1"
+soroban-sdk = { workspace = true }
+soroban-token-sdk = { workspace = true }
+stellar-access = { workspace = true }
+stellar-tokens = { workspace = true }
+stellar-macros = { workspace = true }
 
 [dev-dependencies]
-soroban-sdk = { version = "21.0.0", features = ["testutils"] }
-
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-lto = true
-codegen-units = 1
-panic = "abort"
-
-[profile.release-with-logs]
-inherits = "release"
-
-
+soroban-sdk = { workspace = true, features = ["testutils"] }
