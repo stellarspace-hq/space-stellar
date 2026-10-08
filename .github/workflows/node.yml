@@ -8,6 +8,7 @@ env:
   CARGO_TERM_COLOR: always
   PKG_CONFIG_PATH: /usr/lib/pkgconfig
   PUBLIC_STELLAR_NETWORK: local
+  RUST_VERSION: 1.89.0
 jobs:
   contract:
     name: Contracts Verification
@@ -18,12 +19,23 @@ jobs:
       uses: dtolnay/rust-toolchain@1.89.0
       with:
         components: rustfmt
+    - name: Cache cargo registry and build
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-
+          ${{ runner.os }}-cargo-
     - name: Check contract formatting
-      working-directory: contracts
       run: cargo fmt --all -- --check
-    - name: Build contracts
-      working-directory: contracts
-      run: cargo build
+    - name: Build contracts (locked)
+      run: cargo build --locked --workspace
   build:
     name: Frontend and Integration Build
     runs-on: ubuntu-latest
@@ -44,7 +56,10 @@ jobs:
           target/
 
           '
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-
+          ${{ runner.os }}-cargo-
     - name: Install frontend dependencies
       working-directory: frontend
       run: npm ci
