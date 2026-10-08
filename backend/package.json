@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test:api": "node scripts/test-api.js",
-    "test": "node scripts/test-api.js",
+    "test:api": "node scripts/run-tests.js",
+    "test": "node scripts/run-tests.js",
     "test:multiplayer": "node scripts/test-multiplayer-room.js",
     "test:ready": "node scripts/test-ready-status.js",
     "test:game": "node scripts/test-multiplayer-game.js",
