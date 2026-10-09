@@ -1,6 +1,12 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import {
+  readyUpdate,
+  validateCreateRoom,
+  validateJoin,
+  validateMode,
+} from '../utils/roomRules.js';
 
 const router = express.Router();
 
@@ -22,31 +28,20 @@ router.post('/create', async (req, res) => {
     } = req.body;
 
       // Normalize mode value (trim, lowercase, validate)
-      const normalizedMode = mode ? mode.toString().trim().toLowerCase() : 'solo';
-      
-      // Validate mode against database constraint
-      const validModes = ['solo', 'versus', 'multiplayer'];
-      if (!validModes.includes(normalizedMode)) {
-        console.error('❌ Invalid mode value:', mode, '-> normalized:', normalizedMode);
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`,
-          received: mode,
-          normalized: normalizedMode,
-          validModes
-        });
+      const modeCheck = validateMode(mode);
+      if (!modeCheck.ok) {
+        return res.status(modeCheck.status).json(modeCheck.body);
       }
+      const normalizedMode = modeCheck.mode;
 
       // Normalize room_code (trim whitespace)
       const normalizedRoomCode = roomCode ? roomCode.toString().trim() : roomCode;
       
       console.log('📦 Creating room:', { roomCode: normalizedRoomCode, mode: normalizedMode, address });
 
-      if (!normalizedRoomCode || !address) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Missing required fields: roomCode, address' 
-        });
+      const createCheck = validateCreateRoom({ roomCode, address });
+      if (!createCheck.ok) {
+        return res.status(createCheck.status).json(createCheck.body);
       }
 
     // Check database connection
@@ -848,19 +843,12 @@ router.post('/:roomCode/join', async (req, res) => {
         status: room.status
       });
 
-      // Check if room is multiplayer mode
-      if (room.mode !== 'multiplayer') {
-        console.log('❌ Room is not multiplayer mode:', room.mode);
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Room is not in multiplayer mode' 
-        });
+      // Validate the join against the room (mode, capacity, self-join).
+      const joinCheck = validateJoin(room, address);
+      if (!joinCheck.ok) {
+        return res.status(joinCheck.status).json(joinCheck.body);
       }
-
-      // Check if room already has a guest
-      if (room.guest_address) {
-        // Check if this address is already the guest
-        if (room.guest_address === address) {
+      if (joinCheck.alreadyGuest) {
           console.log('✅ User is already the guest in this room');
           // PERBAIKAN: Return guest ship info dari request body (ship info guest saat join)
           const guestShipInfo = {
@@ -897,22 +885,6 @@ router.post('/:roomCode/join', async (req, res) => {
             },
             message: 'Already in room'
           });
-        } else {
-          console.log('❌ Room is full');
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Room is full (already has a guest)' 
-          });
-        }
-      }
-
-      // Check if address is trying to join their own room as guest
-      if (room.host_address === address) {
-        console.log('❌ Cannot join your own room as guest');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'You are already the host of this room' 
-        });
       }
 
       // Add guest to room (use normalized room code)
@@ -1032,36 +1004,25 @@ router.post('/:roomCode/ready', async (req, res) => {
 
       const room = roomResult.rows[0];
 
-      // Determine if user is host or guest
-      const isHost = room.host_address === address;
-      const isGuest = room.guest_address === address;
-
-      if (!isHost && !isGuest) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'You are not a member of this room' 
-        });
+      // Determine if user is host or guest and which column to update.
+      const readyCheck = readyUpdate(room, address, ready);
+      if (!readyCheck.ok) {
+        return res.status(readyCheck.status).json(readyCheck.body);
       }
 
       // Update ready status
-      let updateQuery;
-      if (isHost) {
-        updateQuery = await pool.query(
-          `UPDATE rooms 
+      const updateQuery = await pool.query(
+        readyCheck.field === 'host_ready'
+          ? `UPDATE rooms
            SET host_ready = $1
            WHERE room_code = $2
-           RETURNING *`,
-          [ready, normalizedRoomCode]
-        );
-      } else {
-        updateQuery = await pool.query(
-          `UPDATE rooms 
+           RETURNING *`
+          : `UPDATE rooms
            SET guest_ready = $1
            WHERE room_code = $2
            RETURNING *`,
-          [ready, normalizedRoomCode]
-        );
-      }
+        readyCheck.params
+      );
 
       const updatedRoom = updateQuery.rows[0];
       console.log('✅ Ready status updated:', {
