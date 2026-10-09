@@ -13,9 +13,9 @@ jobs:
     name: Contracts Verification
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Set up Rust toolchain
-      uses: dtolnay/rust-toolchain@166de8caa14bb03d0e4ce3de7cc787f95ccf7188 # 1.89.0
+      uses: dtolnay/rust-toolchain@166de8caa14bb03d0e4ce3de7cc787f95ccf7188
       with:
         toolchain: 1.89.0
         components: rustfmt
@@ -29,8 +29,8 @@ jobs:
     name: Frontend and Integration Build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-    - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
       with:
         path: '~/.cargo/bin/
 
@@ -54,14 +54,14 @@ jobs:
       run: npm run build
     - run: rustup target add wasm32v1-none
     - name: Start Stellar Quickstart
-      uses: stellar/quickstart@3a367f3f009f3ec4199889e922d28ce70add1753 # main
+      uses: stellar/quickstart@3a367f3f009f3ec4199889e922d28ce70add1753
       with:
         tag: testing
         network: local
     - run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev
         pkg-config
     - name: Install cargo-binstall
-      uses: cargo-bins/cargo-binstall@38e8f5e4c386b611d51e8aa997b9a06a3c8eb67a # v1.15.6
+      uses: cargo-bins/cargo-binstall@38e8f5e4c386b611d51e8aa997b9a06a3c8eb67a
     - name: Check for stellar-scaffold binary
       run: "if ! command -v stellar-scaffold &> /dev/null; then\n  echo \"stellar-scaffold\
         \ not found, installing...\"\n  cargo binstall stellar-scaffold-cli\nelse\n\
@@ -73,24 +73,16 @@ jobs:
     - name: Build clients before building the project
       run: STELLAR_SCAFFOLD_ENV=development stellar-scaffold build --build-clients
     - name: Assert generated contract artifacts exist
-      run: |
-        set -euo pipefail
-        wasm="$(find target/stellar -name 'space_stellar_nft.wasm' -print -quit)"
-        if [ -z "$wasm" ]; then
-          echo "::error::space_stellar_nft.wasm was not produced under target/stellar/"
-          exit 1
-        fi
-        client="$(find packages -name '*.ts' -print -quit 2>/dev/null || true)"
-        if [ -z "$client" ]; then
-          echo "::error::stellar-scaffold build --build-clients emitted no client files under packages/"
-          exit 1
-        fi
-        echo "Generated wasm:   $wasm"
-        echo "Generated client: $client"
+      run: "set -euo pipefail\nwasm=\"$(find target/stellar -name 'space_stellar_nft.wasm'\
+        \ -print -quit)\"\nif [ -z \"$wasm\" ]; then\n  echo \"::error::space_stellar_nft.wasm\
+        \ was not produced under target/stellar/\"\n  exit 1\nfi\nclient=\"$(find\
+        \ packages -name '*.ts' -print -quit 2>/dev/null || true)\"\nif [ -z \"$client\"\
+        \ ]; then\n  echo \"::error::stellar-scaffold build --build-clients emitted\
+        \ no client files under packages/\"\n  exit 1\nfi\necho \"Generated wasm:\
+        \   $wasm\"\necho \"Generated client: $client\"\n"
     - run: npm run build
     - name: Run tests
       run: npm test --if-present
-
   docs:
     name: Docs Command Drift
     runs-on: ubuntu-latest
@@ -98,3 +90,16 @@ jobs:
     - uses: actions/checkout@v4
     - name: Check documented commands and paths
       run: node scripts/check-docs-commands.js
+  wasm-size:
+    name: Wasm Size Regression
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@1.89.0
+      with:
+        targets: wasm32v1-none
+    - name: Build contracts to wasm
+      run: cargo build --release --target wasm32v1-none --workspace
+    - name: Check wasm sizes against the recorded budget
+      run: node scripts/check-wasm-size.js

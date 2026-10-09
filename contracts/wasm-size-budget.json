@@ -1,0 +1,7 @@
+{
+  "artifact_dir": "target/wasm32v1-none/release",
+  "contracts": {
+    "space_stellar_nft": 65536,
+    "space_stellar_pfp": 49152
+  }
+}
