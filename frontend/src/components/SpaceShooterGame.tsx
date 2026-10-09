@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import axios from 'axios'
 import { getSocket, disconnectSocket } from '../utils/socket'
+import logger from '../utils/logger'
 import type { Socket } from 'socket.io-client'
 import './SpaceShooterGame.css'
 
@@ -183,36 +184,36 @@ const SpaceShooterGame = ({
       // Solo mode: gunakan prop (yang sudah di-set dari localStorage di Game.tsx)
       if (shipImage) {
         imageToLoad = shipImage
-        console.log('✅ Solo mode Player 1: Using ship image from prop:', imageToLoad, 'rarity:', shipRarity)
+        logger.debug('✅ Solo mode Player 1: Using ship image from prop:', imageToLoad, 'rarity:', shipRarity)
       } else if (shipRarity) {
         imageToLoad = getShipImage(shipRarity)
-        console.log('✅ Solo mode Player 1: Generated ship image from prop shipRarity:', shipRarity, '→', imageToLoad)
+        logger.debug('✅ Solo mode Player 1: Generated ship image from prop shipRarity:', shipRarity, '→', imageToLoad)
       }
     } else if (isMultiplayer && roomData?.hostShip) {
       // Multiplayer: prioritaskan roomData.hostShip
       // Ini berlaku untuk BOTH host dan guest (keduanya harus melihat host ship yang benar)
       if (roomData.hostShip.image) {
         imageToLoad = roomData.hostShip.image
-        console.log('✅ Multiplayer Player 1: Using ship image from roomData.hostShip.image:', imageToLoad, 'rarity:', roomData.hostShip.rarity)
+        logger.debug('✅ Multiplayer Player 1: Using ship image from roomData.hostShip.image:', imageToLoad, 'rarity:', roomData.hostShip.rarity)
       } else if (roomData.hostShip.rarity) {
         imageToLoad = getShipImage(roomData.hostShip.rarity)
-        console.log('✅ Multiplayer Player 1: Generated ship image from roomData.hostShip.rarity:', roomData.hostShip.rarity, '→', imageToLoad)
+        logger.debug('✅ Multiplayer Player 1: Generated ship image from roomData.hostShip.rarity:', roomData.hostShip.rarity, '→', imageToLoad)
       }
     }
     
     // Fallback ke prop jika tidak ada di roomData (untuk multiplayer jika roomData tidak ada)
     if (!imageToLoad && shipImage) {
       imageToLoad = shipImage
-      console.log('✅ Player 1: Using ship image from prop (fallback):', imageToLoad)
+      logger.debug('✅ Player 1: Using ship image from prop (fallback):', imageToLoad)
     } else if (!imageToLoad && shipRarity) {
       imageToLoad = getShipImage(shipRarity)
-      console.log('✅ Player 1: Generated ship image from prop shipRarity (fallback):', shipRarity, '→', imageToLoad)
+      logger.debug('✅ Player 1: Generated ship image from prop shipRarity (fallback):', shipRarity, '→', imageToLoad)
     }
     
     if (imageToLoad) {
       // PERBAIKAN: Check jika image sudah sama, skip reload untuk avoid flicker
       if (shipImageRef.current?.src === imageToLoad) {
-        console.log('✅ Player 1: Ship image already loaded:', imageToLoad)
+        logger.debug('✅ Player 1: Ship image already loaded:', imageToLoad)
         return
       }
       
@@ -220,14 +221,14 @@ const SpaceShooterGame = ({
       img.src = imageToLoad
       img.onload = () => {
         shipImageRef.current = img
-        console.log('✅ Player 1 ship image loaded and set:', imageToLoad, 'rarity:', roomData?.hostShip?.rarity || shipRarity)
+        logger.debug('✅ Player 1 ship image loaded and set:', imageToLoad, 'rarity:', roomData?.hostShip?.rarity || shipRarity)
       }
       img.onerror = () => {
-        console.warn('⚠️ Failed to load Player 1 ship image:', imageToLoad)
+        logger.debug('⚠️ Failed to load Player 1 ship image:', imageToLoad)
         shipImageRef.current = null
       }
     } else {
-      console.warn('⚠️ No image to load for Player 1:', { isMultiplayer, hasRoomData: !!roomData, hasHostShip: !!roomData?.hostShip, shipImage, shipRarity })
+      logger.debug('⚠️ No image to load for Player 1:', { isMultiplayer, hasRoomData: !!roomData, hasHostShip: !!roomData?.hostShip, shipImage, shipRarity })
     }
   }, [shipImage, shipRarity, isMultiplayer, roomData?.hostShip?.image, roomData?.hostShip?.rarity])
 
@@ -254,17 +255,17 @@ const SpaceShooterGame = ({
     if (roomData?.guestShip) {
       if (roomData.guestShip.image) {
         imageToLoad = roomData.guestShip.image
-        console.log('✅ Player 2: Using ship image from roomData.guestShip.image:', imageToLoad, 'rarity:', roomData.guestShip.rarity)
+        logger.debug('✅ Player 2: Using ship image from roomData.guestShip.image:', imageToLoad, 'rarity:', roomData.guestShip.rarity)
       } else if (roomData.guestShip.rarity) {
         imageToLoad = getShipImage(roomData.guestShip.rarity)
-        console.log('✅ Player 2: Generated ship image from roomData.guestShip.rarity:', roomData.guestShip.rarity, '→', imageToLoad)
+        logger.debug('✅ Player 2: Generated ship image from roomData.guestShip.rarity:', roomData.guestShip.rarity, '→', imageToLoad)
       }
     }
     
     if (imageToLoad) {
       // PERBAIKAN: Check jika image sudah sama, skip reload untuk avoid flicker
       if (player2ShipImageRef.current?.src === imageToLoad) {
-        console.log('✅ Player 2: Ship image already loaded:', imageToLoad)
+        logger.debug('✅ Player 2: Ship image already loaded:', imageToLoad)
         return
       }
       
@@ -272,14 +273,14 @@ const SpaceShooterGame = ({
       img.src = imageToLoad
       img.onload = () => {
         player2ShipImageRef.current = img
-        console.log('✅ Player 2 ship image loaded and set:', imageToLoad, 'rarity:', roomData?.guestShip?.rarity)
+        logger.debug('✅ Player 2 ship image loaded and set:', imageToLoad, 'rarity:', roomData?.guestShip?.rarity)
       }
       img.onerror = () => {
-        console.warn('⚠️ Failed to load Player 2 ship image:', imageToLoad)
+        logger.debug('⚠️ Failed to load Player 2 ship image:', imageToLoad)
         player2ShipImageRef.current = null
       }
     } else {
-      console.warn('⚠️ No image to load for Player 2:', { isMultiplayer, hasRoomData: !!roomData, hasGuestShip: !!roomData?.guestShip })
+      logger.debug('⚠️ No image to load for Player 2:', { isMultiplayer, hasRoomData: !!roomData, hasGuestShip: !!roomData?.guestShip })
     }
   }, [isMultiplayer, roomData?.guestShip?.image, roomData?.guestShip?.rarity])
 
@@ -293,16 +294,16 @@ const SpaceShooterGame = ({
       
       img.onload = () => {
         enemyImagesRef.current[type] = img
-        console.log(`✅ Enemy image loaded: ${type}`)
+        logger.debug(`✅ Enemy image loaded: ${type}`)
       }
       
       img.onerror = () => {
         if (retryCount < 2) {
           // Retry loading
-          console.warn(`⚠️ Retry loading enemy image: ${type} (attempt ${retryCount + 1})`)
+          logger.debug(`⚠️ Retry loading enemy image: ${type} (attempt ${retryCount + 1})`)
           setTimeout(() => loadEnemyImage(type, retryCount + 1), 500)
         } else {
-          console.warn(`⚠️ Failed to load enemy image: ${type} after ${retryCount + 1} attempts (using fallback shape)`)
+          logger.debug(`⚠️ Failed to load enemy image: ${type} after ${retryCount + 1} attempts (using fallback shape)`)
           enemyImagesRef.current[type] = null
           // Don't show red box - we'll use colored shapes instead
         }
@@ -346,10 +347,10 @@ const SpaceShooterGame = ({
   // PERBAIKAN: Gunakan shipRarity dari roomData untuk multiplayer, fallback ke prop
   const actualShipRarity = useMemo(() => {
     if (isMultiplayer && roomData?.hostShip?.rarity) {
-      console.log('✅ SpaceShooterGame: Using shipRarity from roomData.hostShip:', roomData.hostShip.rarity)
+      logger.debug('✅ SpaceShooterGame: Using shipRarity from roomData.hostShip:', roomData.hostShip.rarity)
       return roomData.hostShip.rarity
     }
-    console.log('✅ SpaceShooterGame: Using shipRarity from prop:', shipRarity)
+    logger.debug('✅ SpaceShooterGame: Using shipRarity from prop:', shipRarity)
     return shipRarity
   }, [isMultiplayer, roomData?.hostShip?.rarity, shipRarity])
 
@@ -474,12 +475,12 @@ const SpaceShooterGame = ({
   // Initialize game state for multiplayer
   const initializeGameState = useCallback(async () => {
     if (!isMultiplayer || !roomCode || !address || !roomData) {
-      console.log('⚠️ Cannot initialize game state:', { isMultiplayer, roomCode, address, hasRoomData: !!roomData })
+      logger.debug('⚠️ Cannot initialize game state:', { isMultiplayer, roomCode, address, hasRoomData: !!roomData })
       return
     }
     
     try {
-      console.log('🎮 Initializing multiplayer game state...', { 
+      logger.debug('🎮 Initializing multiplayer game state...', { 
         roomCode, 
         address, 
         isHost, 
@@ -493,7 +494,7 @@ const SpaceShooterGame = ({
       })
       
       if (response.data && response.data.success) {
-        console.log('✅ Game state initialized', response.data.gameState)
+        logger.debug('✅ Game state initialized', response.data.gameState)
         setGameStateInitialized(true)
         
         // Set initial positions from backend
@@ -509,7 +510,7 @@ const SpaceShooterGame = ({
             if (state.players.guest && roomData.guestAddress) {
               player2Ref.current.x = state.players.guest.x || (canvas ? canvas.width - 500 : 500)
               player2Ref.current.y = state.players.guest.y || (canvas ? canvas.height - player2Ref.current.height - 50 : 500)
-              console.log('✅ Host: Player 1 at', playerRef.current.x, playerRef.current.y, 'Player 2 at', player2Ref.current.x, player2Ref.current.y)
+              logger.debug('✅ Host: Player 1 at', playerRef.current.x, playerRef.current.y, 'Player 2 at', player2Ref.current.x, player2Ref.current.y)
             }
           } else {
             // Guest: Player 1 (host) on left, Player 2 (guest) on right
@@ -522,14 +523,14 @@ const SpaceShooterGame = ({
               player2Ref.current.x = state.players.guest.x || (canvas ? canvas.width - 500 : 500)
               player2Ref.current.y = state.players.guest.y || (canvas ? canvas.height - player2Ref.current.height - 50 : 500)
             }
-            console.log('✅ Guest: Player 1 at', playerRef.current.x, playerRef.current.y, 'Player 2 at', player2Ref.current.x, player2Ref.current.y)
+            logger.debug('✅ Guest: Player 1 at', playerRef.current.x, playerRef.current.y, 'Player 2 at', player2Ref.current.x, player2Ref.current.y)
           }
         }
       } else {
-        console.error('❌ Game state initialization failed:', response.data)
+        logger.error('❌ Game state initialization failed:', response.data)
       }
     } catch (error: any) {
-      console.error('❌ Error initializing game state:', error)
+      logger.error('❌ Error initializing game state:', error)
       // Still set initialized to allow game to continue
       setGameStateInitialized(true)
     }
@@ -569,7 +570,7 @@ const SpaceShooterGame = ({
     
     const remoteState = remoteGameStateRef.current
     if (!remoteState || !remoteState.players.guest) {
-      console.warn('⚠️ updateGuestPlayer: No guest state available')
+      logger.debug('⚠️ updateGuestPlayer: No guest state available')
       return
     }
     
@@ -1228,11 +1229,11 @@ const SpaceShooterGame = ({
           // Player 1 collected coin
           coinsCollectedRef.current += coinValue
           setCoins(coinsCollectedRef.current)
-          console.log(`💰 Player 1 collected coin! +${coinValue} coins (Total: ${coinsCollectedRef.current})`)
+          logger.debug(`💰 Player 1 collected coin! +${coinValue} coins (Total: ${coinsCollectedRef.current})`)
         } else if (hitPlayer2) {
           // Player 2 collected coin
           player2CoinsRef.current += coinValue
-          console.log(`💰 Player 2 collected coin! +${coinValue} coins (Total: ${player2CoinsRef.current})`)
+          logger.debug(`💰 Player 2 collected coin! +${coinValue} coins (Total: ${player2CoinsRef.current})`)
         }
       }
     })
@@ -1290,30 +1291,30 @@ const SpaceShooterGame = ({
           if (powerUp.type === 'shield') {
             shieldActiveRef.current = true
             shieldEndTimeRef.current = now + 3000
-            console.log('🛡️ Player 1: Shield activated! Immune to damage for 3 seconds')
+            logger.debug('🛡️ Player 1: Shield activated! Immune to damage for 3 seconds')
           } else if (powerUp.type === 'triple') {
             tripleShotActiveRef.current = true
             tripleShotEndTimeRef.current = now + 5000
-            console.log('🔶 Player 1: Triple shot activated! 3-way bullets for 5 seconds')
+            logger.debug('🔶 Player 1: Triple shot activated! 3-way bullets for 5 seconds')
           } else if (powerUp.type === 'laser') {
             laserActiveRef.current = true
             laserEndTimeRef.current = now + 5000
-            console.log('🔴 Player 1: Laser activated! Straight laser shots for 5 seconds')
+            logger.debug('🔴 Player 1: Laser activated! Straight laser shots for 5 seconds')
           }
         } else if (hitPlayer2) {
           // Apply power-up effect to player 2
           if (powerUp.type === 'shield') {
             player2ShieldActiveRef.current = true
             player2ShieldEndTimeRef.current = now + 3000
-            console.log('🛡️ Player 2: Shield activated! Immune to damage for 3 seconds')
+            logger.debug('🛡️ Player 2: Shield activated! Immune to damage for 3 seconds')
           } else if (powerUp.type === 'triple') {
             player2TripleShotActiveRef.current = true
             player2TripleShotEndTimeRef.current = now + 5000
-            console.log('🔶 Player 2: Triple shot activated! 3-way bullets for 5 seconds')
+            logger.debug('🔶 Player 2: Triple shot activated! 3-way bullets for 5 seconds')
           } else if (powerUp.type === 'laser') {
             player2LaserActiveRef.current = true
             player2LaserEndTimeRef.current = now + 5000
-            console.log('🔴 Player 2: Laser activated! Straight laser shots for 5 seconds')
+            logger.debug('🔴 Player 2: Laser activated! Straight laser shots for 5 seconds')
           }
         }
       }
@@ -1325,29 +1326,29 @@ const SpaceShooterGame = ({
     // Check if effects expired for player 1
     if (shieldActiveRef.current && now >= shieldEndTimeRef.current) {
       shieldActiveRef.current = false
-      console.log('🛡️ Player 1: Shield expired')
+      logger.debug('🛡️ Player 1: Shield expired')
     }
     if (tripleShotActiveRef.current && now >= tripleShotEndTimeRef.current) {
       tripleShotActiveRef.current = false
-      console.log('🔶 Player 1: Triple shot expired')
+      logger.debug('🔶 Player 1: Triple shot expired')
     }
     if (laserActiveRef.current && now >= laserEndTimeRef.current) {
       laserActiveRef.current = false
-      console.log('🔴 Player 1: Laser expired')
+      logger.debug('🔴 Player 1: Laser expired')
     }
     
     // Check if effects expired for player 2
     if (player2ShieldActiveRef.current && now >= player2ShieldEndTimeRef.current) {
       player2ShieldActiveRef.current = false
-      console.log('🛡️ Player 2: Shield expired')
+      logger.debug('🛡️ Player 2: Shield expired')
     }
     if (player2TripleShotActiveRef.current && now >= player2TripleShotEndTimeRef.current) {
       player2TripleShotActiveRef.current = false
-      console.log('🔶 Player 2: Triple shot expired')
+      logger.debug('🔶 Player 2: Triple shot expired')
     }
     if (player2LaserActiveRef.current && now >= player2LaserEndTimeRef.current) {
       player2LaserActiveRef.current = false
-      console.log('🔴 Player 2: Laser expired')
+      logger.debug('🔴 Player 2: Laser expired')
     }
   }, [isMultiplayer, roomData])
 
@@ -1778,7 +1779,7 @@ const SpaceShooterGame = ({
       if (hitPlayer1) {
         // PERBAIKAN: Jika shield aktif, tidak terkena damage
         if (isShieldActive) {
-          console.log('🛡️ Shield protected from damage!')
+          logger.debug('🛡️ Shield protected from damage!')
         } else {
           // Damage based on enemy type (with shield reduction)
           let damage = 0
@@ -1807,7 +1808,7 @@ const SpaceShooterGame = ({
                 const finalScore = scoreRef.current || score
                 const finalPlayer2Score = player2ScoreRef.current || 0
                 const finalCoins = coinsCollectedRef.current
-                console.log('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
+                logger.debug('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
                 setTimeout(() => {
                   onGameOver(finalScore, finalCoins, finalPlayer2Score)
                 }, 50)
@@ -1820,7 +1821,7 @@ const SpaceShooterGame = ({
               }
               const finalScore = scoreRef.current || score
               const finalCoins = coinsCollectedRef.current
-              console.log('🎮 Game Over - Final Score:', finalScore, 'Coins:', finalCoins)
+              logger.debug('🎮 Game Over - Final Score:', finalScore, 'Coins:', finalCoins)
               setTimeout(() => {
                 onGameOver(finalScore, finalCoins)
               }, 50)
@@ -1833,7 +1834,7 @@ const SpaceShooterGame = ({
         // PERBAIKAN: Jika shield aktif untuk player 2, tidak terkena damage
         const isPlayer2ShieldActive = player2ShieldActiveRef.current && now < player2ShieldEndTimeRef.current
         if (isPlayer2ShieldActive) {
-          console.log('🛡️ Player 2 Shield protected from damage!')
+          logger.debug('🛡️ Player 2 Shield protected from damage!')
         } else {
           // Damage based on enemy type (with shield reduction)
           let damage = 0
@@ -1852,7 +1853,7 @@ const SpaceShooterGame = ({
         
         // Check if player 2 died
         if (player2HealthRef.current <= 0) {
-          console.log('💀 Player 2 died!')
+          logger.debug('💀 Player 2 died!')
           
           // Check if both players are dead
           if (playerHealthRef.current <= 0) {
@@ -1866,14 +1867,14 @@ const SpaceShooterGame = ({
               const finalScore = scoreRef.current || score
               const finalPlayer2Score = player2ScoreRef.current || 0
               const finalCoins = coinsCollectedRef.current
-              console.log('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
+              logger.debug('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
               setTimeout(() => {
                 onGameOver(finalScore, finalCoins, finalPlayer2Score)
               }, 50)
             }
           } else {
             // Player 2 dead but Player 1 still alive - continue game (player 2 ship will disappear/ghost)
-            console.log('💀 Player 2 died, but Player 1 is still alive. Game continues...')
+            logger.debug('💀 Player 2 died, but Player 1 is still alive. Game continues...')
           }
         }
       }
@@ -1917,7 +1918,7 @@ const SpaceShooterGame = ({
       if (hitPlayer1 && playerHealthRef.current > 0) {
         // PERBAIKAN: Jika shield aktif, tidak terkena damage
         if (isShieldActive) {
-          console.log('🛡️ Shield protected from bullet damage!')
+          logger.debug('🛡️ Shield protected from bullet damage!')
           return false // Remove bullet tapi tidak damage
         }
         
@@ -1929,7 +1930,7 @@ const SpaceShooterGame = ({
         
         // Check if player 1 died
         if (playerHealthRef.current <= 0) {
-          console.log('💀 Player 1 died from bullet!')
+          logger.debug('💀 Player 1 died from bullet!')
           
           // In multiplayer: check if both players are dead
           if (isMultiplayer && roomData?.guestAddress) {
@@ -1944,14 +1945,14 @@ const SpaceShooterGame = ({
                 const finalScore = scoreRef.current || score
                 const finalPlayer2Score = player2ScoreRef.current || 0
                 const finalCoins = coinsCollectedRef.current
-                console.log('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
+                logger.debug('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
                 setTimeout(() => {
                   onGameOver(finalScore, finalCoins, finalPlayer2Score)
                 }, 50)
               }
             } else {
               // Player 1 dead but Player 2 still alive - continue game
-              console.log('💀 Player 1 died, but Player 2 is still alive. Game continues...')
+              logger.debug('💀 Player 1 died, but Player 2 is still alive. Game continues...')
             }
           } else {
             // Solo mode - game over
@@ -1963,7 +1964,7 @@ const SpaceShooterGame = ({
               }
               const finalScore = scoreRef.current || score
               const finalCoins = coinsCollectedRef.current
-              console.log('🎮 Game Over - Final Score:', finalScore, 'Coins:', finalCoins)
+              logger.debug('🎮 Game Over - Final Score:', finalScore, 'Coins:', finalCoins)
               setTimeout(() => {
                 onGameOver(finalScore, finalCoins)
               }, 50)
@@ -1977,7 +1978,7 @@ const SpaceShooterGame = ({
         // PERBAIKAN: Jika shield aktif untuk player 2, tidak terkena damage
         const isPlayer2ShieldActive = player2ShieldActiveRef.current && now < player2ShieldEndTimeRef.current
         if (isPlayer2ShieldActive) {
-          console.log('🛡️ Player 2 Shield protected from bullet damage!')
+          logger.debug('🛡️ Player 2 Shield protected from bullet damage!')
           return false // Remove bullet tapi tidak damage
         }
         
@@ -1989,7 +1990,7 @@ const SpaceShooterGame = ({
         
         // Check if player 2 died
         if (player2HealthRef.current <= 0) {
-          console.log('💀 Player 2 died from bullet!')
+          logger.debug('💀 Player 2 died from bullet!')
           
           // Check if both players are dead
           if (playerHealthRef.current <= 0) {
@@ -2003,14 +2004,14 @@ const SpaceShooterGame = ({
               const finalScore = scoreRef.current || score
               const finalPlayer2Score = player2ScoreRef.current || 0
               const finalCoins = coinsCollectedRef.current
-              console.log('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
+              logger.debug('🎮 Game Over - Both players dead - Player 1 Score:', finalScore, 'Player 2 Score:', finalPlayer2Score, 'Coins:', finalCoins)
               setTimeout(() => {
                 onGameOver(finalScore, finalCoins, finalPlayer2Score)
               }, 50)
             }
           } else {
             // Player 2 dead but Player 1 still alive - continue game (player 2 ship will disappear/ghost)
-            console.log('💀 Player 2 died, but Player 1 is still alive. Game continues...')
+            logger.debug('💀 Player 2 died, but Player 1 is still alive. Game continues...')
           }
         }
         return false
@@ -2147,6 +2148,110 @@ const SpaceShooterGame = ({
           img.onload = () => {
             player2ShipImageRef.current = img
           }
+    
+    logger.debug('🔌 Starting REST API multiplayer sync...', { roomCode, address, isHost })
+    
+    // Poll other players' data (position, health, bullets, ship)
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(
+          `${API_URL}/api/multiplayer/get-players/${roomCode}/${address}`
+        )
+        
+        if (response.data.success && response.data.players) {
+          response.data.players.forEach((player: any) => {
+            if (player.address === roomData?.hostAddress && !isHost) {
+              // Guest melihat host data
+              if (player.x !== undefined && player.y !== undefined) {
+                playerRef.current.x = player.x
+                playerRef.current.y = player.y
+              }
+              if (player.health !== undefined) {
+                playerHealthRef.current = player.health
+              }
+              if (player.score !== undefined) {
+                scoreRef.current = player.score
+                setScore(player.score)
+              }
+              if (player.coins !== undefined) {
+                coinsCollectedRef.current = player.coins
+                setCoins(player.coins)
+              }
+              if (player.bullets && Array.isArray(player.bullets)) {
+                // Merge bullets dari player lain (filter bullets yang sudah ada)
+                const existingBulletIds = new Set(bulletsRef.current.map(b => b.id))
+                const newBullets = player.bullets
+                  .filter((b: any) => !existingBulletIds.has(b.id))
+                  .map((b: any) => ({
+                    id: b.id,
+                    x: b.x,
+                    y: b.y,
+                    width: 10,
+                    height: 20,
+                    speed: 12,
+                    damage: shipStats.attack,
+                    playerId: 'host'
+                  }))
+                bulletsRef.current.push(...newBullets)
+              }
+              // Update ship image dari player lain (host)
+              if (player.shipImage && player.shipImage !== shipImageRef.current?.src) {
+                const img = new Image()
+                img.src = player.shipImage
+                img.onload = () => {
+                  shipImageRef.current = img
+                  logger.debug('✅ Updated Player 1 (host) ship image from sync:', player.shipImage)
+                }
+                img.onerror = () => {
+                  logger.debug('⚠️ Failed to load Player 1 ship image from sync:', player.shipImage)
+                }
+              }
+            } else if (player.address === roomData?.guestAddress && isHost) {
+              // Host melihat guest data
+              if (player.x !== undefined && player.y !== undefined) {
+                player2Ref.current.x = player.x
+                player2Ref.current.y = player.y
+              }
+              if (player.health !== undefined) {
+                player2HealthRef.current = player.health
+              }
+              if (player.score !== undefined) {
+                player2ScoreRef.current = player.score
+              }
+              if (player.coins !== undefined) {
+                player2CoinsRef.current = player.coins
+              }
+              if (player.bullets && Array.isArray(player.bullets)) {
+                // Merge bullets dari player lain
+                const existingBulletIds = new Set(bulletsRef.current.map(b => b.id))
+                const newBullets = player.bullets
+                  .filter((b: any) => !existingBulletIds.has(b.id))
+                  .map((b: any) => ({
+                    id: b.id,
+                    x: b.x,
+                    y: b.y,
+                    width: 10,
+                    height: 20,
+                    speed: 12,
+                    damage: shipStats.attack,
+                    playerId: 'guest'
+                  }))
+                bulletsRef.current.push(...newBullets)
+              }
+              // Update ship image dari player lain (guest)
+              if (player.shipImage && player.shipImage !== player2ShipImageRef.current?.src) {
+                const img = new Image()
+                img.src = player.shipImage
+                img.onload = () => {
+                  player2ShipImageRef.current = img
+                  logger.debug('✅ Updated Player 2 (guest) ship image from sync:', player.shipImage)
+                }
+                img.onerror = () => {
+                  logger.debug('⚠️ Failed to load Player 2 ship image from sync:', player.shipImage)
+                }
+              }
+            }
+          })
         }
       }
     }
@@ -2233,6 +2338,9 @@ const SpaceShooterGame = ({
       clearInterval(stateInterval)
       clearInterval(fallbackInterval)
       socket.off('player-state', handleRemoteState)
+      clearInterval(pollInterval)
+      clearInterval(sendInterval)
+      logger.debug('🔌 Stopped REST API multiplayer sync')
     }
   }, [isMultiplayer, roomCode, address, isHost, roomData, shipImage, shipRarity, shipStats.attack, gameOver])
 
@@ -2245,11 +2353,11 @@ const SpaceShooterGame = ({
     
     // Try WebSocket, but don't fail if it doesn't work
     try {
-      console.log('🔌 Trying WebSocket connection...', { roomCode, address, isHost })
+      logger.debug('🔌 Trying WebSocket connection...', { roomCode, address, isHost })
       const socket = getSocket()
       socketRef.current = socket
     } catch (error) {
-      console.warn('⚠️ WebSocket failed, using REST API only:', error)
+      logger.debug('⚠️ WebSocket failed, using REST API only:', error)
       return
     }
     
@@ -2259,11 +2367,11 @@ const SpaceShooterGame = ({
     // Wait for connection, then join room
     if (socket.connected) {
       socket.emit('join-room', { roomCode, address, isHost })
-      console.log('✅ WebSocket joined room immediately:', { roomCode, address, isHost })
+      logger.debug('✅ WebSocket joined room immediately:', { roomCode, address, isHost })
     } else {
       socket.on('connect', () => {
         socket.emit('join-room', { roomCode, address, isHost })
-        console.log('✅ WebSocket joined room after connect:', { roomCode, address, isHost })
+        logger.debug('✅ WebSocket joined room after connect:', { roomCode, address, isHost })
       })
     }
     
@@ -2271,7 +2379,7 @@ const SpaceShooterGame = ({
     const handlePlayerMovement = ({ address: playerAddress, input }: any) => {
       if (playerAddress === address) return // Ignore own movement
       
-      console.log('🎮 Received player movement:', { playerAddress, input })
+      logger.debug('🎮 Received player movement:', { playerAddress, input })
       
       // Apply movement immediately for real-time feel
       if (playerAddress === roomData?.hostAddress && !isHost) {
@@ -2298,15 +2406,15 @@ const SpaceShooterGame = ({
     
     // Listen for room events
     const handleRoomStatus = ({ playersCount }: any) => {
-      console.log('👥 Room status:', { playersCount })
+      logger.debug('👥 Room status:', { playersCount })
     }
     
     const handlePlayerJoined = ({ address: joinedAddress, isHost: joinedIsHost, playersCount }: any) => {
-      console.log('👤 Player joined:', { joinedAddress, joinedIsHost, playersCount })
+      logger.debug('👤 Player joined:', { joinedAddress, joinedIsHost, playersCount })
     }
     
     const handlePlayerLeft = ({ address: leftAddress, playersCount }: any) => {
-      console.log('👋 Player left:', { leftAddress, playersCount })
+      logger.debug('👋 Player left:', { leftAddress, playersCount })
     }
     
     // Register event listeners
@@ -2318,7 +2426,7 @@ const SpaceShooterGame = ({
     // Cleanup: leave room on unmount
     return () => {
       if (socketRef.current && roomCode) {
-        console.log('🔌 Leaving WebSocket room:', roomCode)
+        logger.debug('🔌 Leaving WebSocket room:', roomCode)
         socketRef.current.emit('leave-room', { roomCode })
         
         // Remove event listeners
@@ -2340,7 +2448,7 @@ const SpaceShooterGame = ({
   // WebSocket event listeners setup (REAL-TIME MULTIPLAYER)
   useEffect(() => {
     if (!isMultiplayer || !roomCode || !gameStateInitialized || !address) {
-      console.log('⚠️ WebSocket setup skipped:', {
+      logger.debug('⚠️ WebSocket setup skipped:', {
         isMultiplayer,
         roomCode,
         gameStateInitialized,
@@ -2351,13 +2459,13 @@ const SpaceShooterGame = ({
     
     // Check if WebSocket is available
     if (!socketRef.current) {
-      console.warn('⚠️ WebSocket not available, game will run in local mode')
+      logger.debug('⚠️ WebSocket not available, game will run in local mode')
       return
     }
     
     // Check if WebSocket is connected
     if (!socketRef.current.connected) {
-      console.warn('⚠️ WebSocket not connected, waiting for connection...')
+      logger.debug('⚠️ WebSocket not connected, waiting for connection...')
       // Game will still run locally, WebSocket will sync when connected
     }
     
@@ -2366,7 +2474,7 @@ const SpaceShooterGame = ({
     // SEMUA player: Kirim input ke server setiap frame (jika WebSocket connected)
     let inputInterval: NodeJS.Timeout | null = null
     if (!gameOver) {
-      console.log(`✅ ${isHost ? 'Host' : 'Guest'}: Starting input sending`, {
+      logger.debug(`✅ ${isHost ? 'Host' : 'Guest'}: Starting input sending`, {
         roomCode,
         address,
         isHost,
@@ -2377,12 +2485,12 @@ const SpaceShooterGame = ({
         sendInput() // Will check WebSocket connection inside
       }, 16) // ~60fps
     } else {
-      console.log('⚠️ Input sending skipped: game over')
+      logger.debug('⚠️ Input sending skipped: game over')
     }
     
     // SEMUA player: Terima game state dari server
     const handleGameState = (gameState: any) => {
-      console.log(`📥 ${isHost ? 'Host' : 'Guest'}: Received game state from server`, {
+      logger.debug(`📥 ${isHost ? 'Host' : 'Guest'}: Received game state from server`, {
         players: gameState?.players?.length || 0,
         tick: gameState?.tick
       })
@@ -2390,7 +2498,7 @@ const SpaceShooterGame = ({
     }
     
     socket.on('game-state', handleGameState)
-    console.log(`👂 ${isHost ? 'Host' : 'Guest'}: Listening for game-state events`)
+    logger.debug(`👂 ${isHost ? 'Host' : 'Guest'}: Listening for game-state events`)
     
     // Start game di server saat game initialized (hanya host yang start)
     if (roomData?.hostAddress && roomData?.guestAddress && isHost && !gameStartedOnServerRef.current) {
@@ -2403,7 +2511,7 @@ const SpaceShooterGame = ({
         { address: roomData.guestAddress, speed: shipStats.speed, fireRate: shipStats.fireRate }
       ]
       
-      console.log('🎮 Host: Starting multiplayer game on server...', { canvasWidth, canvasHeight, roomCode, players: players.length })
+      logger.debug('🎮 Host: Starting multiplayer game on server...', { canvasWidth, canvasHeight, roomCode, players: players.length })
       
       gameStartedOnServerRef.current = true
       socket.emit('start-game', {
@@ -2413,7 +2521,7 @@ const SpaceShooterGame = ({
         canvasHeight
       })
     } else {
-      console.log('⚠️ Game start skipped:', {
+      logger.debug('⚠️ Game start skipped:', {
         hasHostAddress: !!roomData?.hostAddress,
         hasGuestAddress: !!roomData?.guestAddress,
         isHost,
@@ -2423,7 +2531,7 @@ const SpaceShooterGame = ({
     
     // Listen for game-started event from server
     const handleGameStarted = ({ roomCode: startedRoomCode, initialState }: any) => {
-      console.log('✅ Game started on server:', { startedRoomCode, initialState })
+      logger.debug('✅ Game started on server:', { startedRoomCode, initialState })
       
       // Set initial positions from server
       if (initialState && initialState.players) {
@@ -2438,7 +2546,7 @@ const SpaceShooterGame = ({
             player2Ref.current.y = player.y
           }
         })
-        console.log('🎯 Initial positions set from server')
+        logger.debug('🎯 Initial positions set from server')
       }
     }
     socket.on('game-started', handleGameStarted)
@@ -2540,7 +2648,7 @@ const SpaceShooterGame = ({
     
     // Set player initial position only once (don't reset after collision)
     if (playerInitialXRef.current === null) {
-      console.log('🎮 Setting initial player positions:', { isMultiplayer, isHost, hasGuest: !!roomData?.guestAddress })
+      logger.debug('🎮 Setting initial player positions:', { isMultiplayer, isHost, hasGuest: !!roomData?.guestAddress })
       
       if (isMultiplayer && roomData?.guestAddress) {
         // Multiplayer: Player 1 (host) on left, Player 2 (guest) on right
@@ -2558,12 +2666,12 @@ const SpaceShooterGame = ({
           player2Ref.current.x = canvas.width - 500
           player2Ref.current.y = canvas.height - player2Ref.current.height - 50
         }
-        console.log('✅ Multiplayer positions set - Player 1:', playerRef.current.x, playerRef.current.y, 'Player 2:', player2Ref.current.x, player2Ref.current.y)
+        logger.debug('✅ Multiplayer positions set - Player 1:', playerRef.current.x, playerRef.current.y, 'Player 2:', player2Ref.current.x, player2Ref.current.y)
       } else {
         // Solo: Player in center
         playerRef.current.x = canvas.width / 2 - playerRef.current.width / 2
         playerRef.current.y = canvas.height - playerRef.current.height - 50
-        console.log('✅ Solo position set - Player 1:', playerRef.current.x, playerRef.current.y)
+        logger.debug('✅ Solo position set - Player 1:', playerRef.current.x, playerRef.current.y)
       }
       playerInitialXRef.current = playerRef.current.x
       playerInitialYRef.current = playerRef.current.y
@@ -2663,7 +2771,7 @@ const SpaceShooterGame = ({
             const currentShipImageSrc = shipImageRef.current.src
             const expectedRarity = isMultiplayer && roomData?.hostShip?.rarity ? roomData.hostShip.rarity : actualShipRarity
             if (currentShipImageSrc.includes('classic') && expectedRarity !== 'Classic') {
-              console.warn('⚠️ Player 1: Rendering Classic ship but expected:', expectedRarity, 'image src:', currentShipImageSrc)
+              logger.debug('⚠️ Player 1: Rendering Classic ship but expected:', expectedRarity, 'image src:', currentShipImageSrc)
             }
             ctx.drawImage(shipImageRef.current, player.x, player.y, player.width, player.height)
           } catch (err) {
@@ -2759,7 +2867,7 @@ const SpaceShooterGame = ({
               const currentShipImageSrc = player2ShipImg.src
               const expectedRarity = isMultiplayer && roomData?.guestShip?.rarity ? roomData.guestShip.rarity : 'Classic'
               if (currentShipImageSrc.includes('classic') && expectedRarity !== 'Classic') {
-                console.warn('⚠️ Player 2: Rendering Classic ship but expected:', expectedRarity, 'image src:', currentShipImageSrc)
+                logger.debug('⚠️ Player 2: Rendering Classic ship but expected:', expectedRarity, 'image src:', currentShipImageSrc)
               }
               ctx.drawImage(player2ShipImg, player2.x, player2.y, player2.width, player2.height)
             } catch (err) {
