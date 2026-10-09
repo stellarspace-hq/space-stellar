@@ -171,6 +171,13 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Full player state sync - REAL-TIME broadcast
+  socket.on('player-state', (payload) => {
+    if (!payload || !payload.roomCode) return;
+    const { roomCode, address, ...state } = payload;
+    socket.to(roomCode).emit('player-state', { address, state });
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
     console.log('❌ WebSocket client disconnected:', socket.id);
