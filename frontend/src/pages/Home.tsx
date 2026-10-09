@@ -29,6 +29,10 @@ const Home = () => {
   const [loading, setLoading] = useState(false)
   const [equippedShip, setEquippedShip] = useState<string | null>(null)
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false)
+  // Handle-play state: a failed room creation must surface a retryable error.
+  const [playError, setPlayError] = useState<string | null>(null)
+  const [playMode, setPlayMode] = useState<'solo' | 'multiplayer' | null>(null)
+  const [creatingRoom, setCreatingRoom] = useState(false)
 
   // Load equipped ship from localStorage
   useEffect(() => {
@@ -375,6 +379,10 @@ const Home = () => {
       return
     }
 
+    setPlayError(null)
+    setPlayMode(mode)
+    setCreatingRoom(true)
+
     try {
       // Generate room code
       const roomCode = Math.floor(100000 + Math.random() * 900000).toString()
@@ -407,17 +415,23 @@ const Home = () => {
         }
       )
 
-      if (response.data.success) {
+      // The URL must always contain a room code the backend actually created.
+      const createdRoomCode = response.data?.room?.roomCode
+      if (response.data?.success && createdRoomCode) {
         // Navigate to room with mode parameter
-        navigate(`/room/${roomCode}?mode=${mode}`)
+        navigate(`/room/${createdRoomCode}?mode=${mode}`)
       } else {
-        throw new Error('Failed to create room')
+        throw new Error(response.data?.message || 'Failed to create room')
       }
     } catch (error: any) {
       console.error('Error creating room:', error)
-      // Still navigate even if backend fails (game can work offline)
-      const roomCode = Math.floor(100000 + Math.random() * 900000).toString()
-      navigate(`/room/${roomCode}?mode=${mode}`)
+      // Do NOT invent a local room code and navigate to it: the backend never
+      // created that room, so Room.tsx would load a non-existent match.
+      const errorMessage =
+        error.response?.data?.message || error.message || 'Could not create a room'
+      setPlayError(errorMessage)
+    } finally {
+      setCreatingRoom(false)
     }
   }
 
@@ -596,7 +610,7 @@ const Home = () => {
                     <button 
                       className={`btn btn-play-solo ${!currentShip?.owned ? 'btn-disabled' : ''}`}
                       onClick={() => handlePlay('solo')}
-                      disabled={!currentShip?.owned}
+                      disabled={!currentShip?.owned || creatingRoom}
                       title={!currentShip?.owned ? 'You need to own this ship to play' : 'Start solo game'}
                     >
                       PLAY SOLO
@@ -604,7 +618,7 @@ const Home = () => {
                     <button 
                       className={`btn btn-play-multi ${!currentShip?.owned ? 'btn-disabled' : ''}`}
                       onClick={() => handlePlay('multiplayer')}
-                      disabled={!currentShip?.owned}
+                      disabled={!currentShip?.owned || creatingRoom}
                       title={!currentShip?.owned ? 'You need to own this ship to play' : 'Create multiplayer room'}
                     >
                       CREATE ROOM
@@ -618,6 +632,34 @@ const Home = () => {
                       JOIN ROOM
                     </button>
                   </div>
+
+                  {/* Retryable room-creation error */}
+                  {playError && (
+                    <div
+                      role="alert"
+                      style={{
+                        marginTop: '12px',
+                        color: '#ff5555',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        justifyContent: 'center',
+                        flexWrap: 'wrap'
+                      }}
+                    >
+                      <span>⚠️ Could not create room: {playError}</span>
+                      <button
+                        type="button"
+                        className="btn btn-small"
+                        onClick={() => playMode && handlePlay(playMode)}
+                        disabled={creatingRoom}
+                      >
+                        {creatingRoom ? 'RETRYING...' : 'RETRY'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
