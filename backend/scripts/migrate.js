@@ -86,8 +86,8 @@ const migrate = async () => {
       CREATE TABLE IF NOT EXISTS rooms (
         room_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         room_code TEXT UNIQUE NOT NULL,
-        host_address TEXT NOT NULL REFERENCES users(address),
-        guest_address TEXT REFERENCES users(address),
+        host_address TEXT NOT NULL REFERENCES users(address) ON DELETE CASCADE,
+        guest_address TEXT REFERENCES users(address) ON DELETE SET NULL,
         mode TEXT CHECK (mode IN ('solo','versus','multiplayer')) DEFAULT 'solo',
         seed BIGINT NOT NULL,
         status TEXT CHECK (status IN ('waiting','playing','finished')) DEFAULT 'waiting',
@@ -115,8 +115,8 @@ const migrate = async () => {
       CREATE TABLE IF NOT EXISTS matches (
         match_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         mode TEXT CHECK (mode IN ('solo','versus','multiplayer')) NOT NULL,
-        p1_address TEXT NOT NULL REFERENCES users(address),
-        p2_address TEXT REFERENCES users(address),
+        p1_address TEXT NOT NULL REFERENCES users(address) ON DELETE CASCADE,
+        p2_address TEXT REFERENCES users(address) ON DELETE SET NULL,
         p1_ship_token_id BIGINT,
         p2_ship_token_id BIGINT,
         p1_ship_name TEXT,
@@ -164,6 +164,23 @@ const migrate = async () => {
       END $$;
     `);
 
+    // issue #95: make every foreign key's ON DELETE behaviour explicit and
+    // idempotent (DROP IF EXISTS then ADD, so re-runs are safe).
+    await pool.query(`
+      ALTER TABLE rooms DROP CONSTRAINT IF EXISTS rooms_host_address_fkey;
+      ALTER TABLE rooms ADD CONSTRAINT rooms_host_address_fkey
+        FOREIGN KEY (host_address) REFERENCES users(address) ON DELETE CASCADE;
+      ALTER TABLE rooms DROP CONSTRAINT IF EXISTS rooms_guest_address_fkey;
+      ALTER TABLE rooms ADD CONSTRAINT rooms_guest_address_fkey
+        FOREIGN KEY (guest_address) REFERENCES users(address) ON DELETE SET NULL;
+      ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_p1_address_fkey;
+      ALTER TABLE matches ADD CONSTRAINT matches_p1_address_fkey
+        FOREIGN KEY (p1_address) REFERENCES users(address) ON DELETE CASCADE;
+      ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_p2_address_fkey;
+      ALTER TABLE matches ADD CONSTRAINT matches_p2_address_fkey
+        FOREIGN KEY (p2_address) REFERENCES users(address) ON DELETE SET NULL;
+    `);
+
     // Create leaderboard table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS leaderboard (
@@ -178,6 +195,10 @@ const migrate = async () => {
       CREATE INDEX IF NOT EXISTS idx_ships_owner ON ships(owner_address);
       CREATE INDEX IF NOT EXISTS idx_matches_p1 ON matches(p1_address);
       CREATE INDEX IF NOT EXISTS idx_matches_p2 ON matches(p2_address);
+      CREATE INDEX IF NOT EXISTS idx_rooms_host_address ON rooms(host_address);
+      CREATE INDEX IF NOT EXISTS idx_rooms_guest_address ON rooms(guest_address);
+      CREATE INDEX IF NOT EXISTS idx_rooms_room_code ON rooms(room_code);
+      CREATE INDEX IF NOT EXISTS idx_matches_mode ON matches(mode);
       CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard(best_score DESC);
       CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);
       CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
