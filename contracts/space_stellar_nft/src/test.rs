@@ -42,6 +42,12 @@ fn deploy<'a>(env: &'a Env) -> (Address, SpaceStellarNFTClient<'a>) {
     (owner, SpaceStellarNFTClient::new(env, &contract_id))
 }
 
+fn deploy<'a>(env: &'a Env) -> (Address, SpaceStellarNFTClient<'a>) {
+    let owner = Address::generate(env);
+    let contract_id = env.register(SpaceStellarNFT, (owner.clone(),));
+    (owner, SpaceStellarNFTClient::new(env, &contract_id))
+}
+
 #[test]
 fn test_default_max_supply_is_set() {
     let env = Env::default();
@@ -62,6 +68,8 @@ fn test_mint_requires_recipient_auth() {
 
     let user = Address::generate(&env);
     let token_id = mint_ship(&env, &client, &user);
+
+    let user = Address::generate(&env);
 
     let class = String::from_str(&env, "Fighter");
     let rarity = String::from_str(&env, "Common");
