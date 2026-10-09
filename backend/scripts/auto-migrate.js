@@ -93,6 +93,8 @@ export const runMigrations = async (db = pool) => {
         `);
       }
       const matchesTableCheck = await pool.query(`
+      // issue #94: drop the placeholder seed/checksum columns if present.
+      const matchesCheck = await pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
           WHERE table_schema = 'public' 
@@ -110,6 +112,10 @@ export const runMigrations = async (db = pool) => {
         `);
         await pool.query(`
           CREATE INDEX IF NOT EXISTS idx_matches_mode ON matches(mode);
+      if (matchesCheck.rows[0].exists) {
+        await pool.query(`
+          ALTER TABLE matches DROP COLUMN IF EXISTS seed;
+          ALTER TABLE matches DROP COLUMN IF EXISTS checksum;
         `);
       }
 
@@ -214,8 +220,6 @@ export const runMigrations = async (db = pool) => {
         p1_score INT NOT NULL,
         p2_score INT,
         duration_ms INT NOT NULL DEFAULT 0,
-        seed BIGINT NOT NULL DEFAULT 0,
-        checksum TEXT NOT NULL DEFAULT '',
         room_code TEXT,
         winner_address TEXT,
         coins_awarded INT NOT NULL DEFAULT 0,
