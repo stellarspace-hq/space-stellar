@@ -3,6 +3,7 @@
 
 import express from 'express';
 import { pool } from '../server.js';
+import { getNextUserId, formatUserId } from '../utils/userId.js';
 
 const router = express.Router();
 
@@ -91,6 +92,14 @@ router.post('/deduct', async (req, res) => {
          VALUES ($1, $2, $3, 2000, NOW())
          ON CONFLICT (address) DO NOTHING`,
         [nextId, address, `USER-${nextId}`]
+    let currentPoints = 2000; // Welcome bonus points
+    if (userCheck.rows.length === 0) {
+      // Create user dengan welcome bonus 2000 points
+      const nextId = await getNextUserId(pool);
+      await pool.query(
+        `INSERT INTO users (id, address, user_id, points, created_at) 
+         VALUES ($1, $2, $3, 2000, NOW())`,
+        [nextId, address, formatUserId(nextId)]
       );
 
       // Atomic check-and-decrement. Reading the balance and then updating it in a
@@ -193,11 +202,11 @@ router.post('/add', async (req, res) => {
 
     if (userCheck.rows.length === 0) {
       // Create user dengan welcome bonus 2000 points
-      const nextId = await getNextUserId();
+      const nextId = await getNextUserId(pool);
       await pool.query(
         `INSERT INTO users (id, address, user_id, points, created_at) 
          VALUES ($1, $2, $3, 2000, NOW())`,
-        [nextId, address, `USER-${nextId}`]
+        [nextId, address, formatUserId(nextId)]
       );
       console.log(`✅ New user created with welcome bonus: 2000 points`);
     }
@@ -236,17 +245,6 @@ router.post('/add', async (req, res) => {
     });
   }
 });
-
-// Helper function untuk get next user ID
-const getNextUserId = async () => {
-  try {
-    const result = await pool.query("SELECT nextval('user_id_seq') as next_id");
-    return parseInt(result.rows[0].next_id);
-  } catch (error) {
-    const result = await pool.query('SELECT COALESCE(MAX(id), 243680) + 1 as next_id FROM users');
-    return parseInt(result.rows[0].next_id);
-  }
-};
 
 export default router;
 
