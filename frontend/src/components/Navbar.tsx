@@ -35,6 +35,10 @@ const Navbar = () => {
             // Don't clobber a value the app just updated optimistically.
             if (Date.now() - lastLocalUpdateRef.current < 3000) return
             setPoints(data.points)
+          if (data.success) {
+            // A balance of 0 is valid: only fall back when the API did not
+            // return a usable numeric balance.
+            setPoints(Number.isFinite(data.points) ? data.points : 2000)
           }
         } catch (error) {
           // Keep the last known value. Never fabricate a balance on error.
