@@ -10,6 +10,13 @@ import {
 } from '../utils/matchRules.js';
 import { ensureUser } from '../utils/userId.js';
 import { getShipName } from '../utils/shipRarity.js';
+import {
+  NO_ROOM_DUPLICATE_SQL,
+  ROOM_DUPLICATE_SQL,
+  noRoomDuplicateParams,
+  roomDuplicateParams,
+  validateMode,
+} from '../utils/matchRules.js';
 
 const router = express.Router();
 
@@ -308,7 +315,13 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
         normalized: normalizedMode,
         validModes
       });
+    // Normalize and validate mode against the database CHECK constraint.
+    const modeCheck = validateMode(mode);
+    if (!modeCheck.ok) {
+      console.error('❌ Invalid mode value:', mode, '-> normalized:', modeCheck.body.normalized);
+      return res.status(modeCheck.status).json(modeCheck.body);
     }
+    const normalizedMode = modeCheck.mode;
 
     if (!address) {
       console.error('❌ Missing required fields:', { address: !!address });
@@ -424,6 +437,8 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
            ORDER BY created_at DESC
            LIMIT 1`,
           [normalizedRoomCode, address, validatedScore]
+          ROOM_DUPLICATE_SQL,
+          roomDuplicateParams(roomCode, address, score)
         );
         
         if (duplicateCheck.rows.length > 0) {
@@ -450,6 +465,8 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
            ORDER BY created_at DESC
            LIMIT 1`,
           [address, validatedScore]
+          NO_ROOM_DUPLICATE_SQL,
+          noRoomDuplicateParams(address, score)
         );
         
         if (duplicateCheckNoRoom.rows.length > 0) {
