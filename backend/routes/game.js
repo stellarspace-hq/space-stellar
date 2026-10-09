@@ -9,6 +9,7 @@
 
 import express from 'express';
 import { pool } from '../server.js';
+import { canUpdateGameState, classifyGameAccess } from '../utils/gameAccess.js';
 
 const router = express.Router();
 
@@ -118,23 +119,15 @@ router.post('/:roomCode/input', async (req, res) => {
     // Get game state
     const gameState = gameStates.get(roomCode);
 
-    if (!gameState) {
-      return res.status(404).json({ 
-        success: false, 
-        message: `Game state not found for room: ${roomCode}` 
-      });
+    // Membership is checked before any game state is read or mutated.
+    const access = classifyGameAccess(gameState, address, roomCode);
+    if (access.status) {
+      return res.status(access.status).json(access.body);
     }
 
     // Determine player role
-    const isHost = gameState.hostAddress === address;
-    const isGuest = gameState.guestAddress === address;
-
-    if (!isHost && !isGuest) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'You are not a member of this game' 
-      });
-    }
+    const isHost = access.role === 'host';
+    const isGuest = access.role === 'guest';
 
     // Update player input
     if (isHost) {
@@ -218,10 +211,10 @@ router.post('/:roomCode/state', async (req, res) => {
     }
 
     // Only host can update game state
-    if (currentState.hostAddress !== address) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Only host can update game state' 
+    if (!canUpdateGameState(currentState, address)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only host can update game state'
       });
     }
 
