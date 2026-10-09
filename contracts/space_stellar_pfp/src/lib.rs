@@ -34,7 +34,7 @@ impl SpaceStellarPFP {
     pub fn mint(e: &Env, to: Address) -> u32 {
         // Check if address already has a PFP
         let balance = Base::balance(e, &to);
-        
+
         if balance > 0 {
             panic!("Address already owns a PFP NFT");
         }
@@ -62,4 +62,3 @@ impl NonFungibleToken for SpaceStellarPFP {
 #[default_impl]
 #[contractimpl]
 impl Ownable for SpaceStellarPFP {}
-

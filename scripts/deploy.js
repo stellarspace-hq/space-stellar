@@ -1,20 +1,22 @@
 // Deploy script for Scaffold Stellar
 import { config } from 'dotenv';
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
 import { join } from 'path';
 
 config();
 
-const CONTRACT_NAME = 'space-stellar-nft';
-const WASM_PATH = join(process.cwd(), 'contracts', 'target', 'wasm32-unknown-unknown', 'release', `${CONTRACT_NAME}.wasm`);
+// The canonical contract crate is the `space_stellar_nft` workspace member.
+// (`contracts/space_stellar_nft`), which produces `space_stellar_nft.wasm`.
+const CONTRACT_NAME = 'space_stellar_nft';
+const WASM_PATH = join(process.cwd(), 'target', 'wasm32-unknown-unknown', 'release', `${CONTRACT_NAME}.wasm`);
 
 console.log('🚀 Deploying Space Stellar NFT Contract...\n');
 
 try {
-  // Build contract
+  // Build contract from the `contracts/` directory, which resolves to the
+  // root Cargo workspace that owns the canonical `space_stellar_nft` crate.
   console.log('📦 Building contract...');
-  execSync('cargo build --target wasm32-unknown-unknown --release', {
+  execSync('cargo build --target wasm32-unknown-unknown --release --package space_stellar_nft', {
     cwd: join(process.cwd(), 'contracts'),
     stdio: 'inherit'
   });
@@ -33,10 +35,3 @@ try {
   console.error('❌ Deployment error:', error.message);
   process.exit(1);
 }
-
-
-
-
-
-
-

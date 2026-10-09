@@ -3,7 +3,7 @@
 
 #![no_std]
 
-use soroban_sdk::{Address, contract, contractimpl, Env, String, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol};
 use stellar_access::ownable::{self as ownable, Ownable};
 use stellar_macros::default_impl;
 use stellar_tokens::non_fungible::{Base, NonFungibleToken};
@@ -28,7 +28,7 @@ impl SpaceStellarNFT {
         let uri = String::from_str(e, "https://space-stellar.app");
         let name = String::from_str(e, "Space Stellar Ships");
         let symbol = String::from_str(e, "SSHIP");
-        
+
         Base::set_metadata(e, uri, name, symbol);
         ownable::set_owner(e, &owner);
     }
@@ -51,18 +51,28 @@ impl SpaceStellarNFT {
         // Use OpenZeppelin's sequential mint - returns token ID
         // Based on OpenZeppelin Wizard: https://wizard.openzeppelin.com/stellar#nonfungible
         let token_id = Base::sequential_mint(e, &to);
-        
+
         // Store custom metadata in blockchain
         // Using separate storage for each metadata field for simplicity
         e.storage().instance().set(&(SHIP_CLASS, &token_id), &class);
-        e.storage().instance().set(&(SHIP_RARITY, &token_id), &rarity);
+        e.storage()
+            .instance()
+            .set(&(SHIP_RARITY, &token_id), &rarity);
         e.storage().instance().set(&(SHIP_TIER, &token_id), &tier);
-        e.storage().instance().set(&(SHIP_ATTACK, &token_id), &attack);
+        e.storage()
+            .instance()
+            .set(&(SHIP_ATTACK, &token_id), &attack);
         e.storage().instance().set(&(SHIP_SPEED, &token_id), &speed);
-        e.storage().instance().set(&(SHIP_SHIELD, &token_id), &shield);
-        e.storage().instance().set(&(IPFS_CID, &token_id), &ipfs_cid);
-        e.storage().instance().set(&(METADATA_URI, &token_id), &metadata_uri);
-        
+        e.storage()
+            .instance()
+            .set(&(SHIP_SHIELD, &token_id), &shield);
+        e.storage()
+            .instance()
+            .set(&(IPFS_CID, &token_id), &ipfs_cid);
+        e.storage()
+            .instance()
+            .set(&(METADATA_URI, &token_id), &metadata_uri);
+
         // Return token ID so frontend can get it from transaction result
         token_id
     }
