@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/space_stellar_nft", "contracts/space_stellar_pfp"]
+members = ["contracts", "contracts/space_stellar_nft", "contracts/space_stellar_pfp"]
 resolver = "2"
 
 [workspace.package]
@@ -27,5 +27,3 @@ strip = true
 [profile.release-with-logs]
 debug-assertions = true
 inherits = "release"
-
-
