@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "format": "prettier . --write",
     "deploy:build": "stellar scaffold build",
-    "deploy:publish": "stellar registry publish --wasm target/stellar/space_stellar_nft.wasm --wasm-name space-stellar-nft",
+    "deploy:publish": "stellar registry publish --wasm target/stellar/local/space_stellar_nft.wasm --wasm-name space-stellar-nft",
     "deploy:instance": "stellar registry deploy --contract-name space-stellar-nft-instance --wasm-name space-stellar-nft",
     "deploy:alias": "stellar registry create-alias space-stellar-nft-instance",
     "deploy:full": "npm run deploy:build && npm run deploy:publish && npm run deploy:instance -- --owner",
