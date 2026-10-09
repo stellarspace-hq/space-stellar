@@ -13,10 +13,11 @@ jobs:
     name: Contracts Verification
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     - name: Set up Rust toolchain
-      uses: dtolnay/rust-toolchain@1.89.0
+      uses: dtolnay/rust-toolchain@166de8caa14bb03d0e4ce3de7cc787f95ccf7188 # 1.89.0
       with:
+        toolchain: 1.89.0
         components: rustfmt
     - name: Check contract formatting
       working-directory: contracts
@@ -28,8 +29,8 @@ jobs:
     name: Frontend and Integration Build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/cache@v3
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+    - uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
       with:
         path: '~/.cargo/bin/
 
@@ -53,14 +54,14 @@ jobs:
       run: npm run build
     - run: rustup target add wasm32v1-none
     - name: Start Stellar Quickstart
-      uses: stellar/quickstart@main
+      uses: stellar/quickstart@3a367f3f009f3ec4199889e922d28ce70add1753 # main
       with:
         tag: testing
         network: local
     - run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev
         pkg-config
     - name: Install cargo-binstall
-      uses: cargo-bins/cargo-binstall@v1.15.6
+      uses: cargo-bins/cargo-binstall@38e8f5e4c386b611d51e8aa997b9a06a3c8eb67a # v1.15.6
     - name: Check for stellar-scaffold binary
       run: "if ! command -v stellar-scaffold &> /dev/null; then\n  echo \"stellar-scaffold\
         \ not found, installing...\"\n  cargo binstall stellar-scaffold-cli\nelse\n\
@@ -71,7 +72,21 @@ jobs:
     - run: npx prettier . --check
     - name: Build clients before building the project
       run: STELLAR_SCAFFOLD_ENV=development stellar-scaffold build --build-clients
-    - run: npm run install:contracts
+    - name: Assert generated contract artifacts exist
+      run: |
+        set -euo pipefail
+        wasm="$(find target/stellar -name 'space_stellar_nft.wasm' -print -quit)"
+        if [ -z "$wasm" ]; then
+          echo "::error::space_stellar_nft.wasm was not produced under target/stellar/"
+          exit 1
+        fi
+        client="$(find packages -name '*.ts' -print -quit 2>/dev/null || true)"
+        if [ -z "$client" ]; then
+          echo "::error::stellar-scaffold build --build-clients emitted no client files under packages/"
+          exit 1
+        fi
+        echo "Generated wasm:   $wasm"
+        echo "Generated client: $client"
     - run: npm run build
     - name: Run tests
       run: npm test --if-present
