@@ -9,6 +9,7 @@ use soroban_sdk::{
     Symbol,
 };
 use soroban_sdk::{contract, contractevent, contractimpl, Address, Env, String, Symbol};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol};
 use stellar_access::ownable::{self as ownable, Ownable};
 use stellar_macros::{default_impl, only_owner};
 use stellar_tokens::non_fungible::{sequential, Base, NonFungibleToken};
@@ -91,6 +92,18 @@ pub struct TransferEvent {
     pub from: Address,
     #[topic]
     pub to: Address,
+/// All custom ship metadata stored on-chain for a single token.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShipMetadata {
+    pub class: String,
+    pub rarity: String,
+    pub tier: String,
+    pub attack: u32,
+    pub speed: u32,
+    pub shield: u32,
+    pub ipfs_cid: String,
+    pub metadata_uri: String,
 }
 
 #[contract]
@@ -214,6 +227,21 @@ impl SpaceStellarNFT {
         migrate_field::<u32>(e, &SHIP_SHIELD, token_id);
         migrate_field::<String>(e, &IPFS_CID, token_id);
         migrate_field::<String>(e, &METADATA_URI, token_id);
+    /// Get all custom metadata for a token in a single call.
+    ///
+    /// Returns `None` when the token has no metadata stored (i.e. it was never
+    /// minted by this contract).
+    pub fn get_ship_metadata(e: &Env, token_id: u32) -> Option<ShipMetadata> {
+        Some(ShipMetadata {
+            class: e.storage().instance().get(&(SHIP_CLASS, &token_id))?,
+            rarity: e.storage().instance().get(&(SHIP_RARITY, &token_id))?,
+            tier: e.storage().instance().get(&(SHIP_TIER, &token_id))?,
+            attack: e.storage().instance().get(&(SHIP_ATTACK, &token_id))?,
+            speed: e.storage().instance().get(&(SHIP_SPEED, &token_id))?,
+            shield: e.storage().instance().get(&(SHIP_SHIELD, &token_id))?,
+            ipfs_cid: e.storage().instance().get(&(IPFS_CID, &token_id))?,
+            metadata_uri: e.storage().instance().get(&(METADATA_URI, &token_id))?,
+        })
     }
 
     /// Get ship class for a token
