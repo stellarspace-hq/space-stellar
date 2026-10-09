@@ -4,6 +4,7 @@ import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
 import { CONTRACT_ID } from '../contracts/config'
 import { getShipDefinition, getShipImage } from '../constants/ships'
+import { readEquippedTokenId, writeEquippedTokenId } from '../utils/equippedShip'
 import './Collection.css'
 
 interface Ship {
@@ -29,6 +30,73 @@ const Collection = () => {
   const lastRefreshRef = useRef(0)
 
   const loadCollection = useCallback(async () => {
+  const [refreshKey, setRefreshKey] = useState(0) // PERBAIKAN: Force refresh key
+  // Equipped ship is identified by NFT token id (single source of truth).
+  const [equippedTokenId, setEquippedTokenId] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (address) {
+      loadCollection()
+    }
+  }, [address, refreshKey]) // PERBAIKAN: Add refreshKey dependency
+
+  // Load the equipped ship token id (shared with Home.tsx)
+  useEffect(() => {
+    setEquippedTokenId(readEquippedTokenId(address))
+  }, [address, refreshKey])
+
+  // PERBAIKAN: Refresh collection when window gains focus (after minting from Store)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (address) {
+        console.log('🔄 Window focused, refreshing collection...')
+        setRefreshKey(prev => prev + 1) // Trigger refresh
+      }
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [address])
+
+  // PERBAIKAN: Expose refresh function globally for manual refresh
+  useEffect(() => {
+    (window as any).refreshCollection = () => {
+      console.log('🔄 Manual collection refresh triggered')
+      setRefreshKey(prev => prev + 1)
+    }
+    return () => {
+      delete (window as any).refreshCollection
+    }
+  }, [])
+
+  // Auto-refresh collection when navigating to this page
+  // This helps show newly minted NFTs immediately
+  useEffect(() => {
+    if (!address) return
+    
+    const handleFocus = () => {
+      console.log('🔄 Page focused, refreshing collection...')
+      loadCollection()
+    }
+    
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 Page visible, refreshing collection...')
+        loadCollection()
+      }
+    }
+    
+    // Refresh when page becomes visible
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address])
+
+  const loadCollection = async () => {
     if (!address) return
     if (inFlightRef.current) return // dedupe overlapping refreshes
 
@@ -169,6 +237,13 @@ const Collection = () => {
     }
   }, [loadCollection])
 
+  // Equip state is keyed by NFT token id so Home.tsx and Collection.tsx always
+  // agree, including for Elite ships (tier 'Elite', rarity 'Common').
+  const isShipEquipped = (ship: Ship | null): boolean =>
+    ship !== null &&
+    equippedTokenId !== null &&
+    Number(equippedTokenId) === Number(ship.tokenId)
+
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
       case 'Common': return '#00ffff' // Cyan for Elite
@@ -222,7 +297,7 @@ const Collection = () => {
         {ships.map((ship) => (
           <div
             key={ship.tokenId}
-            className={`ship-card card ${selectedShip?.tokenId === ship.tokenId ? 'selected' : ''}`}
+            className={`ship-card card ${selectedShip?.tokenId === ship.tokenId ? 'selected' : ''} ${isShipEquipped(ship) ? 'equipped' : ''}`}
             onClick={() => setSelectedShip(ship)}
           >
             {/* PERBAIKAN: Selalu gunakan rarity untuk gambar, jangan gunakan ship.image dari contract */}
@@ -243,6 +318,14 @@ const Collection = () => {
             </div>
             <div className="ship-info">
               <h3 className="ship-name">{ship.name}</h3>
+              {isShipEquipped(ship) && (
+                <div
+                  className="ship-equipped-badge"
+                  style={{ color: '#00ff41', fontSize: '0.75em', fontWeight: 'bold', letterSpacing: '1px' }}
+                >
+                  ● EQUIPPED
+                </div>
+              )}
               <div
                 className="ship-rarity"
                 style={{ color: getRarityColor(ship.rarity) }}
@@ -304,23 +387,26 @@ const Collection = () => {
                 <span>SHIELD:</span>
                 <span>{selectedShip.shield}</span>
               </div>
+              <div className="detail-stat">
+                <span>TOKEN ID:</span>
+                <span>#{selectedShip.tokenId}</span>
+              </div>
             </div>
             <button
               className="btn"
+              disabled={isShipEquipped(selectedShip)}
               onClick={() => {
-                // PERBAIKAN: Langsung equip tanpa pop-up
-                // PERBAIKAN: Gunakan tier jika ada (untuk Elite Fighter, tier='Elite' bukan rarity='Common')
+                // Equip is persisted by NFT token id (single source of truth),
+                // matching Home.tsx so both views agree.
                 if (address && selectedShip) {
-                  // PERBAIKAN: Prioritaskan tier untuk equip (Elite, Epic, Legendary, Master, Ultra)
-                  const shipToEquip = selectedShip.tier || selectedShip.rarity
-                  localStorage.setItem(`equipped_ship_${address}`, shipToEquip)
-                  console.log(`✅ ${selectedShip.name} equipped successfully (tier: ${selectedShip.tier}, rarity: ${selectedShip.rarity}, saved: ${shipToEquip})`)
+                  writeEquippedTokenId(address, selectedShip.tokenId, selectedShip.tier || selectedShip.rarity)
+                  setEquippedTokenId(Number(selectedShip.tokenId))
+                  console.log(`✅ ${selectedShip.name} equipped successfully (tokenId: ${selectedShip.tokenId})`)
                   setSelectedShip(null) // Close modal after equip
-                  // Tidak ada alert/pop-up, langsung equip
                 }
               }}
             >
-              EQUIP SHIP
+              {isShipEquipped(selectedShip) ? '✓ EQUIPPED' : 'EQUIP SHIP'}
             </button>
           </div>
         </div>
@@ -330,5 +416,3 @@ const Collection = () => {
 }
 
 export default Collection
-
-
