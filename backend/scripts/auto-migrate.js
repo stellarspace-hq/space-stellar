@@ -50,6 +50,22 @@ export const runMigrations = async () => {
         `);
         console.log('✅ Points column added');
       }
+
+      // Ensure the server-computed match result columns exist. These store the
+      // winner and coin reward derived server-side in POST /api/matches/save.
+      try {
+        await pool.query(`
+          ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS winner_address TEXT;
+        `);
+        await pool.query(`
+          ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS coins_awarded INT NOT NULL DEFAULT 0;
+        `);
+        console.log('✅ Match result columns ensured');
+      } catch (matchColumnError) {
+        console.warn('⚠️ Could not ensure match result columns:', matchColumnError.message);
+      }
       
       return;
     }
@@ -155,6 +171,8 @@ export const runMigrations = async () => {
         seed BIGINT NOT NULL DEFAULT 0,
         checksum TEXT NOT NULL DEFAULT '',
         room_code TEXT,
+        winner_address TEXT,
+        coins_awarded INT NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
@@ -188,6 +206,3 @@ export const runMigrations = async () => {
     // (might be connection issue, will retry on next request)
   }
 };
-
-
-

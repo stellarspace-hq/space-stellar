@@ -1,8 +1,22 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
+import { requireSignedAddress, authPayload } from '../utils/auth.js';
+import {
+  parseScore,
+  parseDuration,
+  computeWinner,
+  deriveCoinsReward,
+} from '../utils/matchRules.js';
 
 const router = express.Router();
+
+// Saving a match requires proving control of the participant address, so a
+// modified client cannot post scores for someone else.
+const requireBodyAddressSignature = requireSignedAddress(
+  (req) => req.body?.address,
+  authPayload
+);
 
 // Submit match result
 router.post('/submit', async (req, res) => {
@@ -216,7 +230,14 @@ router.get('/history/:address', async (req, res) => {
 });
 
 // Save match result (simplified version)
-router.post('/save', async (req, res) => {
+//
+// SECURITY: the client-supplied `score`/`coins` are untrusted input. This
+// handler requires a signed challenge from `address`, validates the score
+// against server bounds, requires a matching server-side session (the room
+// record for multiplayer, the authenticated proof for solo), computes the
+// winner itself, and derives the coin reward from the validated score. The
+// posted `coins` value is never credited.
+router.post('/save', requireBodyAddressSignature, async (req, res) => {
   console.log('📥 Received match save request:', req.body);
   
   try {
@@ -247,16 +268,28 @@ router.post('/save', async (req, res) => {
       });
     }
 
-    console.log('💾 Saving match:', { roomCode, mode: normalizedMode, address, score, shipRarity, shipName, duration });
-
-    if (!address || score === undefined || score === null) {
-      console.error('❌ Missing required fields:', { address: !!address, score });
+    if (!address) {
+      console.error('❌ Missing required fields:', { address: !!address });
       return res.status(400).json({ 
         success: false, 
-        message: 'Missing required fields: address, score',
-        received: { address: !!address, score }
+        message: 'Missing required field: address'
       });
     }
+
+    // Validate the score/!duration server-side. parseScore rejects NaN,
+    // floats, negatives and absurd values; the posted `coins` is ignored.
+    const validatedScore = parseScore(score);
+    if (validatedScore === null) {
+      console.error('❌ Invalid score:', score);
+      return res.status(400).json({ success: false, message: 'Invalid score' });
+    }
+    const validatedDuration = parseDuration(duration);
+    if (validatedDuration === null) {
+      console.error('❌ Invalid duration:', duration);
+      return res.status(400).json({ success: false, message: 'Invalid duration' });
+    }
+
+    console.log('💾 Saving match:', { roomCode, mode: normalizedMode, address, score: validatedScore, shipRarity, shipName, duration: validatedDuration });
 
     // Check database connection
     if (!pool) {
@@ -278,6 +311,37 @@ router.post('/save', async (req, res) => {
         message: 'Database connection failed: ' + connError.message 
       });
     }
+
+    // Require a matching server-side session. For a multiplayer/versus room the
+    // address must be a recorded participant of that room; for solo the
+    // authenticated signed proof above is the session.
+    const normalizedRoomCode = roomCode ? String(roomCode).trim() : '';
+    const isRoomMatch = normalizedRoomCode !== '' && normalizedRoomCode.toLowerCase() !== 'solo';
+    if (isRoomMatch) {
+      const roomResult = await pool.query(
+        'SELECT host_address, guest_address FROM rooms WHERE room_code = $1',
+        [normalizedRoomCode]
+      );
+      if (roomResult.rows.length === 0) {
+        console.error('❌ No room session for room code:', normalizedRoomCode);
+        return res.status(403).json({ success: false, message: 'No server-side session found for this room' });
+      }
+      const room = roomResult.rows[0];
+      if (room.host_address !== address && room.guest_address !== address) {
+        console.error('❌ Address is not a participant of the room:', { address, room: normalizedRoomCode });
+        return res.status(403).json({ success: false, message: 'Address is not a participant of this room' });
+      }
+    }
+
+    // The server computes the winner and the coin reward from the validated
+    // inputs; the posted `coins` value is discarded.
+    const winnerAddress = computeWinner({
+      p1Address: address,
+      p2Address: null,
+      p1Score: validatedScore,
+      p2Score: null
+    });
+    const coinsEarned = deriveCoinsReward(validatedScore);
 
     try {
       console.log('🔄 Step 1: Ensuring user exists...');
@@ -301,7 +365,7 @@ router.post('/save', async (req, res) => {
       // Check for duplicate match (same room_code, address, score within last 10 seconds)
       // This prevents duplicate saves from frontend retries or multiple calls
       // Increase time window to 10 seconds to catch all duplicates
-      if (roomCode) {
+      if (normalizedRoomCode) {
         const duplicateCheck = await pool.query(
           `SELECT match_id FROM matches 
            WHERE room_code = $1 
@@ -310,7 +374,7 @@ router.post('/save', async (req, res) => {
            AND created_at > NOW() - INTERVAL '10 seconds'
            ORDER BY created_at DESC
            LIMIT 1`,
-          [roomCode, address, score]
+          [normalizedRoomCode, address, validatedScore]
         );
         
         if (duplicateCheck.rows.length > 0) {
@@ -326,7 +390,7 @@ router.post('/save', async (req, res) => {
       
       // Also check for duplicate without room_code (fallback for games without room)
       // Same address and score within last 10 seconds (only if no room_code provided)
-      if (!roomCode) {
+      if (!normalizedRoomCode) {
         const duplicateCheckNoRoom = await pool.query(
           `SELECT match_id FROM matches 
            WHERE p1_address = $1 
@@ -335,7 +399,7 @@ router.post('/save', async (req, res) => {
            AND (room_code IS NULL OR room_code = '')
            ORDER BY created_at DESC
            LIMIT 1`,
-          [address, score]
+          [address, validatedScore]
         );
         
         if (duplicateCheckNoRoom.rows.length > 0) {
@@ -364,11 +428,12 @@ router.post('/save', async (req, res) => {
         matchResult = await pool.query(
           `INSERT INTO matches (
             match_id, mode, p1_address, p1_score, duration_ms, room_code, 
-            p1_ship_name, p1_ship_rarity, seed, checksum, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+            p1_ship_name, p1_ship_rarity, winner_address, coins_awarded,
+            seed, checksum, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
           RETURNING *`,
-          [matchId, normalizedMode, address, score, duration, roomCode || null, 
-           shipName || 'Classic Fighter', shipRarity || 'Classic', seed, checksum]
+          [matchId, normalizedMode, address, validatedScore, validatedDuration, normalizedRoomCode || null, 
+           shipName || 'Classic Fighter', shipRarity || 'Classic', winnerAddress, coinsEarned, seed, checksum]
         );
         console.log('✅ Match saved:', matchResult.rows[0].match_id);
       } catch (matchError) {
@@ -389,7 +454,7 @@ router.post('/save', async (req, res) => {
            DO UPDATE SET 
              best_score = GREATEST(leaderboard.best_score, $2),
              updated_at = NOW()`,
-          [address, score]
+          [address, validatedScore]
         );
         console.log('✅ Leaderboard updated');
       } catch (leaderboardError) {
@@ -400,8 +465,32 @@ router.post('/save', async (req, res) => {
         console.warn('⚠️ Match saved but leaderboard update failed (non-critical)');
       }
 
+      // Step 5: Credit the server-derived coin reward. This is the only place
+      // points are credited for a match, and the amount comes from the
+      // validated score - never from the posted body.
+      if (coinsEarned > 0) {
+        try {
+          await pool.query(
+            `UPDATE users 
+             SET points = points + $1,
+                 updated_at = NOW()
+             WHERE address = $2`,
+            [coinsEarned, address]
+          );
+          console.log(`✅ Credited ${coinsEarned} points (server-derived) to ${address.slice(0, 8)}...`);
+        } catch (pointsError) {
+          console.error('❌ Error crediting match reward:', pointsError.message);
+          // Match is saved; reward failure is non-critical and logged.
+        }
+      }
+
       console.log('✅ Match save completed successfully');
-      res.json({ success: true, match: matchResult.rows[0] });
+      res.json({
+        success: true,
+        match: matchResult.rows[0],
+        winnerAddress,
+        coinsEarned
+      });
     } catch (dbError) {
       console.error('❌ Database error saving match:');
       console.error('Error type:', dbError.constructor.name);
@@ -439,10 +528,12 @@ router.post('/save', async (req, res) => {
           const checksum = '';
           const matchResult = await pool.query(
             `INSERT INTO matches (
-              match_id, mode, p1_address, p1_score, duration_ms, room_code, seed, checksum, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+              match_id, mode, p1_address, p1_score, duration_ms, room_code,
+              winner_address, coins_awarded, seed, checksum, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
             RETURNING *`,
-            [matchId, normalizedMode, address, score, duration, roomCode || null, seed, checksum]
+            [matchId, normalizedMode, address, validatedScore, validatedDuration, normalizedRoomCode || null,
+             winnerAddress, coinsEarned, seed, checksum]
           );
           
           // Update leaderboard
@@ -453,10 +544,23 @@ router.post('/save', async (req, res) => {
              DO UPDATE SET 
                best_score = GREATEST(leaderboard.best_score, $2),
                updated_at = NOW()`,
-            [address, score]
+            [address, validatedScore]
           );
+
+          // Credit the server-derived reward on the retry path too.
+          if (coinsEarned > 0) {
+            await pool.query(
+              `UPDATE users SET points = points + $1, updated_at = NOW() WHERE address = $2`,
+              [coinsEarned, address]
+            );
+          }
           
-          return res.json({ success: true, match: matchResult.rows[0] });
+          return res.json({
+            success: true,
+            match: matchResult.rows[0],
+            winnerAddress,
+            coinsEarned
+          });
         } catch (retryError) {
           console.error('❌ Retry failed:', retryError.message);
           // Fall through to return error
@@ -492,4 +596,3 @@ router.post('/save', async (req, res) => {
 });
 
 export default router;
-
