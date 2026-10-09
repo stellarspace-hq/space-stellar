@@ -3,6 +3,7 @@ import axios from 'axios';
 import { pool } from '../server.js';
 import { getShipImage } from '../utils/shipMapping.js';
 import { ensureUser } from '../utils/userId.js';
+import { getShipImage, getShipName } from '../utils/shipRarity.js';
 
 const router = express.Router();
 
@@ -258,26 +259,11 @@ router.get('/collection/:address', async (req, res) => {
       [address]
     );
 
-    // Format ships with names and images based on rarity/tier
+    // Format ships with names and images resolved through the shared table.
     const ships = result.rows.map(ship => {
-      // Determine image based on rarity
-      let image = getShipImage(ship.rarity);
-      
-      // Map ship names based on tier/rarity
-      // Elite Fighter: tier='Elite', rarity='Common'
-      let shipName = `${ship.class} ${ship.rarity}`;
-      if (ship.tier === 'Elite' || (ship.rarity === 'Common' && ship.tier === 'Elite')) {
-        shipName = 'Elite Fighter';
-      } else if (ship.rarity === 'Epic') {
-        shipName = 'Epic Destroyer';
-      } else if (ship.rarity === 'Legendary') {
-        shipName = 'Legendary Cruiser';
-      } else if (ship.rarity === 'Master') {
-        shipName = 'Master Battleship';
-      } else if (ship.rarity === 'Ultra') {
-        shipName = 'Ultra Command';
-      }
-      
+      const image = getShipImage(ship.tier || ship.rarity);
+      const shipName = getShipName(ship.tier || ship.rarity);
+
       return {
         ...ship,
         name: shipName,

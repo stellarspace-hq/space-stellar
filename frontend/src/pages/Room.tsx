@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
+import { getShipImage, getShipName } from '../constants/ships'
 import './Room.css'
 
 interface RoomData {

@@ -9,6 +9,7 @@ import {
   deriveCoinsReward,
 } from '../utils/matchRules.js';
 import { ensureUser } from '../utils/userId.js';
+import { getShipName } from '../utils/shipRarity.js';
 
 const router = express.Router();
 
@@ -181,17 +182,8 @@ router.get('/history/:address', async (req, res) => {
       // Use ship name if available, otherwise map rarity to ship name
       let shipType = shipName;
       if (!shipType && shipRarity) {
-        // Map rarity to ship name for display
-        const rarityToName = {
-          'Common': 'Elite Fighter',
-          'Elite': 'Elite Fighter',
-          'Epic': 'Epic Destroyer',
-          'Legendary': 'Legendary Cruiser',
-          'Master': 'Master Battleship',
-          'Ultra': 'Ultra Command',
-          'Classic': 'Classic Fighter'
-        };
-        shipType = rarityToName[shipRarity] || shipRarity || 'Classic Fighter';
+        // Resolve the ship name through the shared rarity table.
+        shipType = getShipName(shipRarity);
       }
       
       // Final fallback
