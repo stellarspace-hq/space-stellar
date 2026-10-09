@@ -4,29 +4,24 @@ import { useWalletKit } from '../contexts/WalletContext'
 import { PFPMintClient } from '../utils/pfpContract'
 import './SpecialLaunchEvent.css'
 
-const PFP_VARIANTS = [
-  { id: 1, name: 'Cosmic Warrior', rarity: 'Common', image: '/nft-images/pfp/pfp-1.png', weight: 40 },
-  { id: 2, name: 'Stellar Explorer', rarity: 'Uncommon', image: '/nft-images/pfp/pfp-2.png', weight: 25 },
-  { id: 3, name: 'Nebula Guardian', rarity: 'Rare', image: '/nft-images/pfp/pfp-3.png', weight: 15 },
-  { id: 4, name: 'Galaxy Commander', rarity: 'Epic', image: '/nft-images/pfp/pfp-4.png', weight: 10 },
-  { id: 5, name: 'Void Master', rarity: 'Legendary', image: '/nft-images/pfp/pfp-5.png', weight: 7 },
-  { id: 6, name: 'Cosmic Legend', rarity: 'Mythic', image: '/nft-images/pfp/pfp-6.png', weight: 3 }
-]
-
-// Weighted random selection
-const getRandomPFP = () => {
-  const totalWeight = PFP_VARIANTS.reduce((sum, pfp) => sum + pfp.weight, 0)
-  let random = Math.random() * totalWeight
-  
-  for (const pfp of PFP_VARIANTS) {
-    random -= pfp.weight
-    if (random <= 0) {
-      return pfp
-    }
-  }
-  
-  return PFP_VARIANTS[0] // Fallback
+interface PfpVariant {
+  id: number
+  name: string
+  rarity: string
+  image: string
 }
+
+// Display-only list of the six variants. The weighted draw (40/25/15/10/7/3)
+// happens server-side in /api/pfp/roll, so a client cannot pick its own result;
+// the server also signs the assignment, which the mint verifies.
+const PFP_VARIANTS: PfpVariant[] = [
+  { id: 1, name: 'Cosmic Warrior', rarity: 'Common', image: '/nft-images/pfp/pfp-1.png' },
+  { id: 2, name: 'Stellar Explorer', rarity: 'Uncommon', image: '/nft-images/pfp/pfp-2.png' },
+  { id: 3, name: 'Nebula Guardian', rarity: 'Rare', image: '/nft-images/pfp/pfp-3.png' },
+  { id: 4, name: 'Galaxy Commander', rarity: 'Epic', image: '/nft-images/pfp/pfp-4.png' },
+  { id: 5, name: 'Void Master', rarity: 'Legendary', image: '/nft-images/pfp/pfp-5.png' },
+  { id: 6, name: 'Cosmic Legend', rarity: 'Mythic', image: '/nft-images/pfp/pfp-6.png' }
+]
 
 const SpecialLaunchEvent = () => {
   const navigate = useNavigate()
@@ -34,7 +29,8 @@ const SpecialLaunchEvent = () => {
   const [hasPFP, setHasPFP] = useState(false)
   const [userPFP, setUserPFP] = useState<string | null>(null)
   const [isGaching, setIsGaching] = useState(false)
-  const [gachaResult, setGachaResult] = useState<typeof PFP_VARIANTS[0] | null>(null)
+  const [gachaResult, setGachaResult] = useState<PfpVariant | null>(null)
+  const [gachaToken, setGachaToken] = useState<string | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [isMinting, setIsMinting] = useState(false)
   const [mintStatus, setMintStatus] = useState<string>('')
@@ -94,7 +90,7 @@ const SpecialLaunchEvent = () => {
   }
 
   const handleMintNFT = async () => {
-    if (!address || !gachaResult || isMinting || !publicKey || !signTransaction) return
+    if (!address || !gachaResult || !gachaToken || isMinting || !publicKey || !signTransaction) return
 
     setIsMinting(true)
     setMintStatus('Uploading metadata to Pinata...')
@@ -114,7 +110,8 @@ const SpecialLaunchEvent = () => {
           pfpName: gachaResult.name,
           pfpRarity: gachaResult.rarity,
           pfpImage: gachaResult.image,
-          pfpId: gachaResult.id
+          pfpId: gachaResult.id,
+          gachaToken: gachaToken
         })
       })
 
@@ -220,6 +217,7 @@ const SpecialLaunchEvent = () => {
       setUserPFP(gachaResult.image)
       setShowResult(false)
       setGachaResult(null)
+      setGachaToken(null)
       
       if (mintData.tokenId === 0) {
         setMintStatus(`✅ Transaction sent! Processing on-chain...`)
@@ -254,18 +252,34 @@ const SpecialLaunchEvent = () => {
     setIsGaching(true)
     setShowResult(false)
     setGachaResult(null)
+    setGachaToken(null)
 
-    // Gacha animation delay
-    await new Promise(resolve => setTimeout(resolve, 3000))
+    try {
+      // The server performs the weighted roll and signs the assignment.
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+      const response = await fetch(`${apiUrl}/api/pfp/roll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      })
+      const data = await response.json()
 
-    // Weighted random gacha result
-    const result = getRandomPFP()
-    
-    setGachaResult(result)
-    setShowResult(true)
+      if (!data.success || !data.variant) {
+        throw new Error(data.error || 'Failed to roll a PFP')
+      }
 
-    setIsGaching(false)
-    console.log('🎰 Gacha result:', result)
+      // Keep the gacha animation visible for the same duration as before.
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
+      setGachaResult(data.variant)
+      setGachaToken(data.token)
+      setShowResult(true)
+    } catch (error: any) {
+      console.error('❌ Gacha roll failed:', error)
+      setMintStatus(`❌ ${error.message || 'Failed to roll a PFP'}`)
+    } finally {
+      setIsGaching(false)
+    }
   }
 
   if (!isConnected) {
