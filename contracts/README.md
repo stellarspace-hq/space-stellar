@@ -78,6 +78,8 @@ The main NFT contract for minting and managing ship tokens with rich on-chain me
 ✅ **Ownable**: Contract ownership management  
 ✅ **Transfer Support**: Standard NFT transfer operations  
 ✅ **Balance Tracking**: Per-address token balance  
+✅ **Access Control**: `mint` requires the recipient's authorization  
+✅ **Supply Cap**: Configurable maximum supply, owner-settable  
 
 ### Contract Interface
 
@@ -128,9 +130,34 @@ pub fn mint(
 - `u32`: The minted token ID
 
 **Behavior:**
+- Requires authorization from the recipient: `mint` calls `to.require_auth()`
+- Rejects the mint with a `MaxSupplyReached` error once the configured maximum
+  supply has been reached
 - Mints a new NFT using OpenZeppelin's `sequential_mint`
 - Stores all metadata fields in contract storage
 - Returns the assigned token ID
+
+**Caller requirements:**
+- Any account may submit the transaction, but the `to` address must sign it
+  (`require_auth`). Backends that mint on a player's behalf must collect the
+  player's signature (or mint from an account the player has authorized).
+
+#### Supply Cap
+
+```rust
+pub fn get_max_supply(e: &Env) -> u32
+pub fn set_max_supply(e: &Env, max_supply: u32)
+```
+
+**Parameters:**
+- `e`: Soroban environment
+- `max_supply`: New maximum number of mintable ships (owner-only)
+
+**Behavior:**
+- The constructor initializes the cap to `10_000`
+- `mint` panics with `MaxSupplyReached` once the cap is reached
+- `set_max_supply` is owner-gated (`#[only_owner]`) and emits a
+  `MaxSupplyUpdated` event carrying the new cap
 
 #### Metadata Getters
 
