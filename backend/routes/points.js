@@ -10,6 +10,14 @@ import {
   authPayload,
 } from '../utils/auth.js';
 import { deriveMatchReward, isMatchParticipant } from '../utils/matchRules.js';
+import {
+  ADD_POINTS_SQL,
+  DEDUCT_POINTS_SQL,
+  evaluateDeduction,
+  ledgerParams,
+  parseStoredPoints,
+  validateAmount,
+} from '../utils/pointsLedger.js';
 
 const router = express.Router();
 
@@ -62,6 +70,7 @@ router.get('/:address', async (req, res) => {
       rawPoints === null || rawPoints === undefined || !Number.isFinite(parsedPoints)
         ? 2000
         : parsedPoints;
+    const points = parseStoredPoints(result.rows[0].points);
 
     res.json({
       success: true,
@@ -107,7 +116,18 @@ router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (r
         success: false, 
         message: 'Amount must be a positive integer no greater than 1000000' 
       });
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: 'Address and amount required'
+      });
     }
+
+    const amountCheck = validateAmount(amount);
+    if (!amountCheck.ok) {
+      return res.status(amountCheck.status).json(amountCheck.body);
+    }
+    const amountValue = amountCheck.amount;
 
     if (!pool) {
       return res.status(503).json({
@@ -156,7 +176,7 @@ router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (r
       );
       console.log(`✅ New user created with welcome bonus: 2000 points`);
     } else {
-      currentPoints = parseInt(userCheck.rows[0].points) || 2000;
+      currentPoints = parseStoredPoints(userCheck.rows[0].points);
     }
 
     // Check if user has enough points
@@ -168,6 +188,9 @@ router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (r
         required: numericAmount,
         shortage: numericAmount - currentPoints
       });
+    const deduction = evaluateDeduction(currentPoints, amountValue);
+    if (!deduction.ok) {
+      return res.status(deduction.status).json(deduction.body);
     }
 
     // Deduct points
@@ -178,6 +201,8 @@ router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (r
        WHERE address = $2
        RETURNING points`,
       [numericAmount, address]
+      DEDUCT_POINTS_SQL,
+      ledgerParams(amountValue, address)
     );
 
       if (result.rows.length === 0) {
@@ -230,6 +255,9 @@ router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (r
       deducted: numericAmount,
       reason: reason || 'Mint NFT',
       message: `Successfully deducted ${numericAmount} points`
+      deducted: amountValue,
+      reason: reason || 'Mint NFT',
+      message: `Successfully deducted ${amountValue} points`
     });
   } catch (error) {
     console.error('Error deducting points:', error);
@@ -263,7 +291,17 @@ router.post('/add', requireBodyAddressSignature, pointsWriteLimiter, async (req,
         success: false, 
         message: 'Database not available' 
       });
+      return res.status(400).json({
+        success: false,
+        message: 'Address and amount required'
+      });
     }
+
+    const amountCheck = validateAmount(amount);
+    if (!amountCheck.ok) {
+      return res.status(amountCheck.status).json(amountCheck.body);
+    }
+    const amountValue = amountCheck.amount;
 
     // A match/game reward must be backed by a stored match; the amount comes
     // from that record, never from the request body.
@@ -325,12 +363,8 @@ router.post('/add', requireBodyAddressSignature, pointsWriteLimiter, async (req,
 
     // Add points
     const result = await pool.query(
-      `UPDATE users 
-       SET points = points + $1,
-           updated_at = NOW()
-       WHERE address = $2
-       RETURNING points`,
-      [amount, address]
+      ADD_POINTS_SQL,
+      ledgerParams(amountValue, address)
     );
 
     if (result.rows.length === 0) {
@@ -347,8 +381,9 @@ router.post('/add', requireBodyAddressSignature, pointsWriteLimiter, async (req,
       points: newPoints,
       added: amount,
       matchId: matchId || null,
+      added: amountValue,
       reason: reason || 'Reward',
-      message: `Successfully added ${amount} points`
+      message: `Successfully added ${amountValue} points`
     });
   } catch (error) {
     console.error('Error adding points:', error);
