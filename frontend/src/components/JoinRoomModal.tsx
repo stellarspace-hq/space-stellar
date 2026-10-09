@@ -17,19 +17,22 @@ const JoinRoomModal = ({ isOpen, onClose, onJoin }: JoinRoomModalProps) => {
     e.preventDefault()
     setError('')
 
+    // Room codes are case-insensitive; normalise before handing off to the caller
+    const normalizedCode = roomCode.trim().toUpperCase()
+
     // Validate room code
-    if (!roomCode.trim()) {
+    if (!normalizedCode) {
       setError('Please enter a room code')
       return
     }
 
-    if (roomCode.trim().length < 4) {
+    if (normalizedCode.length < 4) {
       setError('Room code must be at least 4 characters')
       return
     }
 
     // Join room
-    onJoin(roomCode.trim())
+    onJoin(normalizedCode)
     setRoomCode('')
   }
 
@@ -68,7 +71,7 @@ const JoinRoomModal = ({ isOpen, onClose, onJoin }: JoinRoomModalProps) => {
           </div>
           
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={!roomCode.trim()}>
               JOIN
             </button>
             <button type="button" className="btn btn-secondary" onClick={handleClose}>
