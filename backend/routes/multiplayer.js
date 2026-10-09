@@ -2,6 +2,7 @@
 // Menghindari kompleksitas WebSocket
 
 import express from 'express';
+import { mergePlayerUpdate, otherPlayers } from '../utils/playerDataMerge.js';
 const router = express.Router();
 
 // Store player data in-memory
@@ -20,35 +21,20 @@ router.post('/update-player', (req, res) => {
   }
   
   const roomPlayers = playerData.get(roomCode);
-  if (!roomPlayers[address]) {
-    roomPlayers[address] = {};
-  }
-  
-  // Update only provided fields
-  if (x !== undefined && y !== undefined) {
-    roomPlayers[address].x = x;
-    roomPlayers[address].y = y;
-  }
-  if (health !== undefined) {
-    roomPlayers[address].health = health;
-  }
-  if (bullets !== undefined) {
-    roomPlayers[address].bullets = bullets;
-  }
-  if (shipImage !== undefined) {
-    roomPlayers[address].shipImage = shipImage;
-  }
-  if (shipRarity !== undefined) {
-    roomPlayers[address].shipRarity = shipRarity;
-  }
-  if (score !== undefined) {
-    roomPlayers[address].score = score;
-  }
-  if (coins !== undefined) {
-    roomPlayers[address].coins = coins;
-  }
-  roomPlayers[address].timestamp = Date.now();
-  
+
+  // Merge the partial update over the last known player object so fields
+  // that are not part of this tick (position, health, ...) are preserved.
+  roomPlayers[address] = mergePlayerUpdate(roomPlayers[address], {
+    x,
+    y,
+    health,
+    bullets,
+    shipImage,
+    shipRarity,
+    score,
+    coins,
+  });
+
   res.json({ success: true });
 });
 
@@ -61,22 +47,9 @@ router.get('/get-players/:roomCode/:address', (req, res) => {
   }
   
   const roomPlayers = playerData.get(roomCode);
-  const otherPlayers = Object.entries(roomPlayers)
-    .filter(([playerAddress]) => playerAddress !== address)
-    .map(([playerAddress, data]) => ({
-      address: playerAddress,
-      x: data.x,
-      y: data.y,
-      health: data.health,
-      bullets: data.bullets || [],
-      shipImage: data.shipImage,
-      shipRarity: data.shipRarity,
-      score: data.score,
-      coins: data.coins,
-      timestamp: data.timestamp
-    }));
-  
-  res.json({ success: true, players: otherPlayers });
+  const players = otherPlayers(roomPlayers, address);
+
+  res.json({ success: true, players });
 });
 
 // Legacy endpoint for backward compatibility
