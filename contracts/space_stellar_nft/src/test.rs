@@ -96,6 +96,12 @@ fn mint_ship(env: &Env, client: &SpaceStellarNFTClient, to: &Address) -> u32 {
     )
 }
 
+fn deploy<'a>(env: &'a Env) -> (Address, SpaceStellarNFTClient<'a>) {
+    let owner = Address::generate(env);
+    let contract_id = env.register(SpaceStellarNFT, (owner.clone(),));
+    (owner, SpaceStellarNFTClient::new(env, &contract_id))
+}
+
 #[test]
 fn test_getters_read_the_minted_values() {
     let env = Env::default();
@@ -140,6 +146,9 @@ fn topic_address(
     topics
         .get(index)
         .and_then(|v| Address::try_from_val(env, &v).ok())
+    let (owner, client) = deploy(&env);
+
+    assert_eq!(client.get_owner(), Some(owner));
 }
 
 #[test]
@@ -395,4 +404,9 @@ fn test_token_uri_unminted_token_panics() {
     let (_owner, client) = deploy(&env);
 
     client.token_uri(&42u32);
+    // The token-ID type used here (u32) matches the contract signature.
+    assert_eq!(client.owner_of(&token_id), user);
+    assert_eq!(client.get_ship_class(&token_id), Some(class));
+    assert_eq!(client.get_ship_rarity(&token_id), Some(rarity));
+    assert_eq!(client.get_ipfs_cid(&token_id), Some(ipfs_cid));
 }
