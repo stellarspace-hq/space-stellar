@@ -6,6 +6,7 @@ import EventMission from '../components/EventMission'
 import axios from 'axios'
 import SpaceStellarNFTClient from '../contracts/client'
 import { CONTRACT_ID } from '../contracts/config'
+import { SHIP_TABLE, getShipImage } from '../constants/ships'
 import './Home.css'
 
 interface Ship {
@@ -264,71 +265,17 @@ const Home = () => {
 
   // Initialize all ships (always show all 6 ships)
   useEffect(() => {
-    const allShips: Ship[] = [
-      {
-        name: 'Classic Fighter',
-        class: 'Fighter',
-        rarity: 'Classic',
-        tier: 'Classic',
-        image: '/nft-images/ships/ship-classic.gif',
-        owned: true
-      },
-      {
-        name: 'Elite Fighter',
-        class: 'Fighter',
-        rarity: 'Common',
-        tier: 'Elite', // Fixed: was 'Elite', should match contract
-        image: '/nft-images/ships/ship-elite.gif',
-        attack: 10,
-        speed: 8,
-        shield: 12,
-        owned: false // Will be updated after loading collection
-      },
-      {
-        name: 'Epic Destroyer',
-        class: 'Destroyer',
-        rarity: 'Epic',
-        tier: 'Epic',
-        image: '/nft-images/ships/ship-epic.gif',
-        attack: 20,
-        speed: 6,
-        shield: 18,
-        owned: false
-      },
-      {
-        name: 'Legendary Cruiser',
-        class: 'Cruiser',
-        rarity: 'Legendary',
-        tier: 'Legendary',
-        image: '/nft-images/ships/ship-legendary.gif',
-        attack: 30,
-        speed: 15,
-        shield: 25,
-        owned: false
-      },
-      {
-        name: 'Master Battleship',
-        class: 'Battleship',
-        rarity: 'Master',
-        tier: 'Master',
-        image: '/nft-images/ships/ship-master.gif',
-        attack: 40,
-        speed: 12,
-        shield: 35,
-        owned: false
-      },
-      {
-        name: 'Ultra Command',
-        class: 'Command',
-        rarity: 'Ultra',
-        tier: 'Ultra',
-        image: '/nft-images/ships/ship-ultra.gif',
-        attack: 50,
-        speed: 18,
-        shield: 45,
-        owned: false
-      }
-    ]
+    const allShips: Ship[] = SHIP_TABLE.map((definition) => ({
+      name: definition.name,
+      class: definition.className,
+      rarity: definition.rarity,
+      tier: definition.tier,
+      image: definition.image,
+      attack: definition.stats.attack,
+      speed: definition.stats.speed,
+      shield: definition.stats.shield,
+      owned: definition.rarity === 'Classic'
+    }))
     
     setShips(allShips)
     
@@ -387,20 +334,6 @@ const Home = () => {
       // Generate room code
       const roomCode = Math.floor(100000 + Math.random() * 900000).toString()
       
-      // Get ship image path
-      const getShipImagePath = (rarity: string) => {
-        const imageMap: { [key: string]: string } = {
-          'Classic': '/nft-images/ships/ship-classic.gif',
-          'Common': '/nft-images/ships/ship-elite.gif',
-          'Elite': '/nft-images/ships/ship-elite.gif',
-          'Epic': '/nft-images/ships/ship-epic.gif',
-          'Legendary': '/nft-images/ships/ship-legendary.gif',
-          'Master': '/nft-images/ships/ship-master.gif',
-          'Ultra': '/nft-images/ships/ship-ultra.gif'
-        }
-        return imageMap[rarity] || '/nft-images/ships/ship-classic.gif'
-      }
-
       // Create room in backend
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/rooms/create`,
@@ -411,7 +344,7 @@ const Home = () => {
           shipRarity: currentShip.rarity,
           shipName: currentShip.name,
           shipClass: currentShip.class,
-          shipImage: currentShip.image || getShipImagePath(currentShip.rarity)
+          shipImage: currentShip.image || getShipImage(currentShip.rarity)
         }
       )
 
@@ -450,20 +383,6 @@ const Home = () => {
     }
 
     try {
-      // Get ship image path
-      const getShipImagePath = (rarity: string) => {
-        const imageMap: { [key: string]: string } = {
-          'Classic': '/nft-images/ships/ship-classic.gif',
-          'Common': '/nft-images/ships/ship-elite.gif',
-          'Elite': '/nft-images/ships/ship-elite.gif',
-          'Epic': '/nft-images/ships/ship-epic.gif',
-          'Legendary': '/nft-images/ships/ship-legendary.gif',
-          'Master': '/nft-images/ships/ship-master.gif',
-          'Ultra': '/nft-images/ships/ship-ultra.gif'
-        }
-        return imageMap[rarity] || '/nft-images/ships/ship-classic.gif'
-      }
-
       // PERBAIKAN: Gunakan tier jika ada (untuk Elite Fighter, tier='Elite' bukan rarity='Common')
       const shipRarity = currentShip.tier || currentShip.rarity
       const shipName = currentShip.tier ? `${currentShip.tier} Fighter` : currentShip.name
@@ -476,7 +395,7 @@ const Home = () => {
           shipRarity: shipRarity,
           shipName: shipName,
           shipClass: currentShip.class,
-          shipImage: currentShip.image || getShipImagePath(shipRarity)
+          shipImage: currentShip.image || getShipImage(shipRarity)
         }
       )
 

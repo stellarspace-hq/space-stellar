@@ -4,21 +4,8 @@ import { useWalletKit } from '../contexts/WalletContext'
 import axios from 'axios'
 import SpaceShooterGame from '../components/SpaceShooterGame'
 import GameSpaceBackground from '../components/GameSpaceBackground'
+import { getShipImage, getShipStats as getSharedShipStats } from '../constants/ships'
 import './Game.css'
-
-// Helper function to get ship image path
-const getShipImage = (rarity: string) => {
-  const imageMap: { [key: string]: string } = {
-    'Classic': '/nft-images/ships/ship-classic.gif',
-    'Common': '/nft-images/ships/ship-elite.gif',
-    'Elite': '/nft-images/ships/ship-elite.gif',
-    'Epic': '/nft-images/ships/ship-epic.gif',
-    'Legendary': '/nft-images/ships/ship-legendary.gif',
-    'Master': '/nft-images/ships/ship-master.gif',
-    'Ultra': '/nft-images/ships/ship-ultra.gif'
-  }
-  return imageMap[rarity] || '/nft-images/ships/ship-classic.gif'
-}
 
 const Game = () => {
   const { roomCode } = useParams<{ roomCode: string }>()
@@ -517,20 +504,9 @@ const Game = () => {
     return getShipImage(getShipRarity())
   }
 
-  // Get ship stats from NFT metadata (from Home page stats)
+  // Get ship stats from the shared rarity table
   const getShipStats = () => {
-    const rarity = getShipRarity()
-    // Ship stats based on rarity (matching NFT metadata)
-    const statsMap: { [key: string]: { attack: number; speed: number; shield: number } } = {
-      'Classic': { attack: 5, speed: 5, shield: 5 },
-      'Common': { attack: 10, speed: 8, shield: 12 },
-      'Elite': { attack: 10, speed: 8, shield: 12 },
-      'Epic': { attack: 20, speed: 6, shield: 18 },
-      'Legendary': { attack: 30, speed: 15, shield: 25 },
-      'Master': { attack: 40, speed: 12, shield: 35 },
-      'Ultra': { attack: 50, speed: 18, shield: 45 }
-    }
-    return statsMap[rarity] || statsMap['Classic']
+    return getSharedShipStats(getShipRarity())
   }
 
   if (loading) {
