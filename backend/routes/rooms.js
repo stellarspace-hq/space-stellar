@@ -7,6 +7,7 @@ import {
   validateJoin,
   validateMode,
 } from '../utils/roomRules.js';
+import { ensureUser } from '../utils/userId.js';
 
 const router = express.Router();
 
@@ -56,12 +57,7 @@ router.post('/create', async (req, res) => {
     try {
       // Ensure user exists first (required for foreign key constraint)
       console.log('🔄 Ensuring user exists in database...');
-      await pool.query(
-        `INSERT INTO users (address, user_id, created_at) 
-         VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-         ON CONFLICT (address) DO NOTHING`,
-        [address]
-      );
+      await ensureUser(pool, address);
       console.log('✅ User exists in database');
 
       // Check if room already exists (use normalized room code)
@@ -303,12 +299,7 @@ router.post('/create', async (req, res) => {
         // Try to create user first, then retry room creation
         try {
           // Import users route function or create user directly
-          await pool.query(
-            `INSERT INTO users (address, user_id, created_at) 
-             VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-             ON CONFLICT (address) DO NOTHING`,
-            [address]
-          );
+          await ensureUser(pool, address);
           
           // Retry room creation
           const retryResult = await pool.query(
@@ -577,12 +568,7 @@ router.post('/:roomCode/start', async (req, res) => {
         console.log('📦 Room not found, creating room before starting:', roomCode);
         
         // Ensure user exists first
-        await pool.query(
-          `INSERT INTO users (address, user_id, created_at) 
-           VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-           ON CONFLICT (address) DO NOTHING`,
-          [address]
-        );
+        await ensureUser(pool, address);
 
         // Create room with playing status
         const roomId = randomUUID();
@@ -691,12 +677,7 @@ router.post('/:roomCode/finish', async (req, res) => {
         console.log('📦 Room not found, creating room before finishing:', roomCode);
         
         // Ensure user exists first
-        await pool.query(
-          `INSERT INTO users (address, user_id, created_at) 
-           VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-           ON CONFLICT (address) DO NOTHING`,
-          [address]
-        );
+        await ensureUser(pool, address);
 
         // Create room with finished status
         const roomId = randomUUID();
@@ -789,12 +770,7 @@ router.post('/:roomCode/join', async (req, res) => {
     try {
       // Ensure user exists first
       console.log('🔄 Ensuring user exists in database...');
-      await pool.query(
-        `INSERT INTO users (address, user_id, created_at) 
-         VALUES ($1, 'USER-' || nextval('user_id_seq'), NOW())
-         ON CONFLICT (address) DO NOTHING`,
-        [address]
-      );
+      await ensureUser(pool, address);
       console.log('✅ User exists in database');
 
       // Normalize room_code (trim whitespace)

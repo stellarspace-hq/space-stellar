@@ -67,6 +67,10 @@ const validateProfileFields = ({ username, email, bio, avatarUrl }) => {
   return { error: null };
 };
 
+import { getNextUserId, formatUserId } from '../utils/userId.js';
+
+const router = express.Router();
+
 // Get or create user profile
 router.get('/profile/:address', async (req, res) => {
   try {
@@ -76,7 +80,7 @@ router.get('/profile/:address', async (req, res) => {
         success: true,
         user: {
           address: req.params.address,
-          userId: `USER-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          userId: formatUserId(Math.floor(Math.random() * 1000000000)),
           username: '',
           stats: { totalMatches: 0, wins: 0, bestScore: 0, shipsOwned: 0 }
         }
@@ -93,10 +97,8 @@ router.get('/profile/:address', async (req, res) => {
 
     let user;
     if (userResult.rows.length === 0) {
-      // Create new user with sequential numeric ID
-      // ID akan auto-generate dari sequence (starting from 243681)
-      // Get next ID first, then insert
-      const nextId = await getNextUserId();
+      // Create new user with the shared sequential numeric ID
+      const nextId = await getNextUserId(pool);
       
       // Insert user dengan id yang sudah di-generate
       // id column memiliki default dari sequence, tapi kita specify explicit untuk konsistensi
@@ -106,6 +108,7 @@ router.get('/profile/:address', async (req, res) => {
          VALUES ($1, $2, $3, 2000, NOW()) 
          RETURNING *`,
         [nextId, address, generateUserId(nextId)]
+        [nextId, address, formatUserId(nextId)]
       );
       user = insertResult.rows[0];
       
@@ -146,8 +149,8 @@ router.get('/profile/:address', async (req, res) => {
       user: {
         ...user,
         // Include numeric ID (id) and text user_id
-        id: user.id, // Sequential numeric ID (243681, 243682, ...)
-        userId: user.user_id, // Text user_id (USER-243681, USER-243682, ...)
+        id: user.id, // Sequential numeric ID
+        userId: user.user_id, // Text user_id
         points: parseInt(user.points) || 2000, // Platform points/koin (off-chain)
         stats: {
           totalMatches: parseInt(stats.total_matches) || 0,
