@@ -29,6 +29,10 @@ const parseLimit = (raw, defaultValue, max) => {
   if (!/^[1-9]\d*$/.test(str)) return null;
   return Math.min(Number(str), max);
 };
+// A score of 0 is legitimate, so a truthiness check is not enough: validate
+// the type, finiteness and sign explicitly.
+const isValidScore = (value) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
 // Submit match result
 router.post('/submit', async (req, res) => {
@@ -44,10 +48,19 @@ router.post('/submit', async (req, res) => {
       durationMs 
     } = req.body;
 
-    if (!p1Address || !p1Score || !mode) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Missing required fields' 
+    const hasP2Score = p2Score !== undefined && p2Score !== null;
+
+    if (!p1Address || !mode || !isValidScore(p1Score)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid required fields: p1Address, mode and a non-negative numeric p1Score are required'
+      });
+    }
+
+    if (hasP2Score && !isValidScore(p2Score)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid p2Score: must be a non-negative finite number'
       });
     }
 
@@ -65,6 +78,7 @@ router.post('/submit', async (req, res) => {
         matchId, mode, p1Address, p2Address || null,
         p1ShipTokenId || null, p2ShipTokenId || null,
         p1Score, p2Score || null, durationMs || 0
+        p1Score, hasP2Score ? p2Score : null, durationMs || 0, seed || 0, checksum || ''
       ]
     );
 
@@ -80,7 +94,7 @@ router.post('/submit', async (req, res) => {
     );
 
     // Update leaderboard for player 2 if exists
-    if (p2Address && p2Score) {
+    if (p2Address && hasP2Score) {
       await pool.query(
         `INSERT INTO leaderboard (address, best_score, updated_at)
          VALUES ($1, $2, NOW())
@@ -92,7 +106,13 @@ router.post('/submit', async (req, res) => {
       );
     }
 
-    res.json({ success: true, match: matchResult.rows[0] });
+    const winner = !hasP2Score || p1Score > p2Score
+      ? p1Address
+      : p2Score > p1Score
+        ? p2Address
+        : 'draw';
+
+    res.json({ success: true, match: { ...matchResult.rows[0], winner } });
   } catch (error) {
     console.error('Error submitting match:', error);
     res.status(500).json({ success: false, message: error.message });
