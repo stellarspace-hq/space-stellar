@@ -216,17 +216,16 @@ The contract implements:
 ### Building
 
 ```bash
-cd contracts/space_stellar_nft
-cargo build --target wasm32-unknown-unknown --release
+# From the repository root
+cargo build --release --target wasm32v1-none --package space_stellar_nft
 ```
 
-**Output:** `target/wasm32-unknown-unknown/release/space_stellar_nft.wasm`
+**Output:** `target/wasm32v1-none/release/space_stellar_nft.wasm`
 
 ### Testing
 
 ```bash
-cd contracts/space_stellar_nft
-cargo test
+cargo test --package space_stellar_nft
 ```
 
 ### Deployment Example
@@ -234,7 +233,7 @@ cargo test
 ```bash
 # Using Scaffold Stellar
 stellar registry publish \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_nft.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_nft.wasm \
   --wasm-name space-stellar-nft
 
 stellar registry deploy \
@@ -317,18 +316,18 @@ Base::balance(e, &owner) > 0
 ### Building
 
 ```bash
-cd contracts/space_stellar_pfp
-cargo build --target wasm32-unknown-unknown --release
+# From the repository root
+cargo build --release --target wasm32v1-none --package space_stellar_pfp
 ```
 
-**Output:** `target/wasm32-unknown-unknown/release/space_stellar_pfp.wasm`
+**Output:** `target/wasm32v1-none/release/space_stellar_pfp.wasm`
 
 ### Deployment Example
 
 ```bash
 # Using Scaffold Stellar
 stellar registry publish \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_pfp.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_pfp.wasm \
   --wasm-name space-stellar-pfp
 
 stellar registry deploy \
@@ -345,7 +344,7 @@ stellar registry deploy \
 ### Prerequisites
 
 - **Rust 1.70+** with Cargo
-- **wasm32-unknown-unknown** target
+- **wasm32v1-none** target
 - **Stellar CLI** (for deployment)
 - **Scaffold Stellar CLI** (recommended)
 
@@ -356,7 +355,7 @@ stellar registry deploy \
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Add wasm32 target
-rustup target add wasm32-unknown-unknown
+rustup target add wasm32v1-none
 
 # Install Scaffold Stellar CLI
 cargo install --locked stellar-scaffold-cli
@@ -369,8 +368,7 @@ cargo install --locked stellar-scaffold-cli
 npm run deploy:build
 
 # Or manually
-cd contracts
-cargo build --target wasm32-unknown-unknown --release
+cargo build --release --target wasm32v1-none --workspace
 ```
 
 ### Contract Optimization
@@ -395,12 +393,10 @@ strip = true               # Strip symbols
 
 ```bash
 # Test all contracts
-cd contracts
-cargo test
+cargo test --workspace
 
 # Test specific contract
-cd contracts/space_stellar_nft
-cargo test
+cargo test --package space_stellar_nft
 ```
 
 ### Code Quality
@@ -410,7 +406,7 @@ cargo test
 cargo fmt
 
 # Lint code
-cargo clippy --target wasm32-unknown-unknown --release
+cargo clippy --release --target wasm32v1-none --workspace
 ```
 
 ---
@@ -428,12 +424,12 @@ npm run deploy:build
 ```bash
 # NFT Contract
 stellar registry publish \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_nft.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_nft.wasm \
   --wasm-name space-stellar-nft
 
 # PFP Contract
 stellar registry publish \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_pfp.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_pfp.wasm \
   --wasm-name space-stellar-pfp
 ```
 
@@ -465,7 +461,7 @@ stellar registry create-alias space-stellar-pfp-instance
 ```bash
 # Deploy NFT Contract
 stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/space_stellar_nft.wasm \
+  --wasm target/wasm32v1-none/release/space_stellar_nft.wasm \
   --source-account YOUR_SECRET_KEY \
   --network testnet
 
@@ -496,8 +492,7 @@ stellar contract invoke \
 ### Unit Tests
 
 ```bash
-cd contracts/space_stellar_nft
-cargo test
+cargo test --package space_stellar_nft
 ```
 
 ### Integration Testing
