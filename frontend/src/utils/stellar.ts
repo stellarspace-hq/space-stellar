@@ -11,6 +11,7 @@ import {
   xdr
 } from '@stellar/stellar-sdk'
 import { useWalletKit } from '../contexts/WalletContext'
+import { normalizePaymentAmount } from './paymentAmount.js'
 
 const NETWORK = (import.meta.env.VITE_STELLAR_NETWORK || 'testnet') as 'testnet' | 'mainnet'
 const NETWORK_PASSPHRASE = NETWORK === 'mainnet'
@@ -162,19 +163,12 @@ export const createPaymentTransaction = async ({
     sendAsset = Asset.native()
   }
 
-  // Convert amount to string format
-  // For XLM (native), convert to stroops (1 XLM = 10,000,000 stroops)
-  // For other assets, use amount as-is (in smallest unit)
-  let amountString: string
-  if (asset === 'native' || !asset) {
-    // Convert XLM to stroops
-    const amountNumber = typeof amount === 'string' ? parseFloat(amount) : amount
-    const stroops = Math.floor(amountNumber * 10000000).toString()
-    amountString = stroops
-  } else {
-    // For non-native assets, use amount as-is
-    amountString = amount.toString()
-  }
+  // Pass the decimal amount straight through. Operation.payment expects a
+  // decimal string and scales it to stroops itself, so pre-scaling here (the
+  // old `Math.floor(amount * 10000000)`) multiplied the payment by 10,000,000.
+  // Only convert to stroops where a raw API genuinely requires an integer
+  // (Operation.payment does not).
+  const amountString = normalizePaymentAmount(asset, amount)
 
   // Add memo if provided
   if (memo) {
