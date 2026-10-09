@@ -8,6 +8,7 @@ use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, panic_with_error, Address, Env, String,
     Symbol,
 };
+use soroban_sdk::{contract, contractevent, contractimpl, Address, Env, String, Symbol};
 use stellar_access::ownable::{self as ownable, Ownable};
 use stellar_macros::{default_impl, only_owner};
 use stellar_tokens::non_fungible::{sequential, Base, NonFungibleToken};
@@ -70,6 +71,26 @@ fn write_metadata<T: IntoVal<Env, Val>>(e: &Env, field: &Symbol, token_id: u32, 
     e.storage()
         .persistent()
         .extend_ttl(&key, TOKEN_TTL_THRESHOLD, TOKEN_EXTEND_AMOUNT);
+/// Emitted when a ship NFT is minted.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MintEvent {
+    #[topic]
+    pub token_id: u32,
+    #[topic]
+    pub owner: Address,
+}
+
+/// Emitted when a ship NFT changes owner.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferEvent {
+    #[topic]
+    pub token_id: u32,
+    #[topic]
+    pub from: Address,
+    #[topic]
+    pub to: Address,
 }
 
 #[contract]
@@ -156,6 +177,14 @@ impl SpaceStellarNFT {
         write_metadata(e, &SHIP_SHIELD, token_id, &shield);
         write_metadata(e, &IPFS_CID, token_id, &ipfs_cid);
         write_metadata(e, &METADATA_URI, token_id, &metadata_uri);
+
+        // Emit a structured mint event so indexers can follow the collection
+        // without polling storage.
+        MintEvent {
+            token_id,
+            owner: to.clone(),
+        }
+        .publish(e);
 
         // Return token ID so frontend can get it from transaction result
         token_id
@@ -244,13 +273,27 @@ fn read_max_supply(e: &Env) -> u32 {
 
 fn write_max_supply(e: &Env, max_supply: u32) {
     e.storage().instance().set(&max_supply_key(e), &max_supply);
+/// Overrides the default `transfer` so a structured ownership-transfer event
+/// is emitted alongside the OpenZeppelin base behaviour.
+pub struct SpaceStellarNFTContractOverrides;
+
+impl stellar_tokens::non_fungible::ContractOverrides for SpaceStellarNFTContractOverrides {
+    fn transfer(e: &Env, from: &Address, to: &Address, token_id: u32) {
+        Base::transfer(e, from, to, token_id);
+        TransferEvent {
+            token_id,
+            from: from.clone(),
+            to: to.clone(),
+        }
+        .publish(e);
+    }
 }
 
 /// Implement OpenZeppelin NonFungibleToken trait
 #[default_impl]
 #[contractimpl]
 impl NonFungibleToken for SpaceStellarNFT {
-    type ContractType = Base;
+    type ContractType = SpaceStellarNFTContractOverrides;
 }
 
 /// Implement OpenZeppelin Ownable trait

@@ -94,6 +94,52 @@ fn mint_ship(env: &Env, client: &SpaceStellarNFTClient, to: &Address) -> u32 {
 fn test_getters_read_the_minted_values() {
     let env = Env::default();
     let (_contract_id, client) = deploy(&env);
+use crate::SpaceStellarNFTClient;
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    Address, Env, String, TryFromVal,
+};
+
+fn deploy<'a>(env: &'a Env) -> SpaceStellarNFTClient<'a> {
+    let owner = Address::generate(env);
+    let contract_id = env.register(SpaceStellarNFT, (owner,));
+    SpaceStellarNFTClient::new(env, &contract_id)
+}
+
+fn mint_ship(env: &Env, client: &SpaceStellarNFTClient, to: &Address) -> u32 {
+    client.mint(
+        to,
+        &String::from_str(env, "Fighter"),
+        &String::from_str(env, "Common"),
+        &String::from_str(env, "Elite"),
+        &10u32,
+        &8u32,
+        &12u32,
+        &String::from_str(env, "QmTest123"),
+        &String::from_str(env, "ipfs://QmTest123"),
+    )
+}
+
+fn topic_u32(env: &Env, topics: &soroban_sdk::Vec<soroban_sdk::Val>, index: u32) -> Option<u32> {
+    topics
+        .get(index)
+        .and_then(|v| u32::try_from_val(env, &v).ok())
+}
+
+fn topic_address(
+    env: &Env,
+    topics: &soroban_sdk::Vec<soroban_sdk::Val>,
+    index: u32,
+) -> Option<Address> {
+    topics
+        .get(index)
+        .and_then(|v| Address::try_from_val(env, &v).ok())
+}
+
+#[test]
+fn test_mint_emits_typed_event_with_token_id_and_owner() {
+    let env = Env::default();
+    let client = deploy(&env);
     let user = Address::generate(&env);
     let token_id = mint_ship(&env, &client, &user);
 
@@ -227,4 +273,41 @@ fn test_metadata_is_stored_in_persistent_not_instance() {
             "metadata must not be instance"
         );
     });
+    let token_id = mint_ship(&env, &client, &user);
+
+    // Read the event log for the `mint` invocation before any other call.
+    let events = env.events().all();
+    let found = events.iter().any(|(_contract, topics, _data)| {
+        topics.len() >= 3
+            && topic_u32(&env, &topics, 1) == Some(token_id)
+            && topic_address(&env, &topics, 2) == Some(user.clone())
+    });
+    assert!(
+        found,
+        "expected a typed mint event with topics [, token_id, owner]"
+    );
+}
+
+#[test]
+fn test_transfer_emits_typed_event_with_from_and_to() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = deploy(&env);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let token_id = mint_ship(&env, &client, &alice);
+
+    client.transfer(&alice, &bob, &token_id);
+    let events = env.events().all();
+    let found = events.iter().any(|(_contract, topics, _data)| {
+        topics.len() >= 4
+            && topic_u32(&env, &topics, 1) == Some(token_id)
+            && topic_address(&env, &topics, 2) == Some(alice.clone())
+            && topic_address(&env, &topics, 3) == Some(bob.clone())
+    });
+    assert!(
+        found,
+        "expected a typed transfer event with topics [, token_id, from, to]"
+    );
 }
