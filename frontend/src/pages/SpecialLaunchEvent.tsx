@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWalletKit } from '../contexts/WalletContext'
 import { PFPMintClient } from '../utils/pfpContract'
+import { PFP_VARIANTS, getRandomPFP } from '../utils/gacha'
 import './SpecialLaunchEvent.css'
 
 interface PfpVariant {
