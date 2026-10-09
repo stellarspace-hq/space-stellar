@@ -4,12 +4,51 @@ import FormData from 'form-data';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// When true (and no real Pinata credentials are present), the IPFS routes return
+// a locally computed, structurally valid CID for development. Never enable in
+// production, and never when a Pinata credential is configured.
+const IPFS_MOCK = process.env.IPFS_MOCK === 'true';
+
+const isMockEnabled = () =>
+  IPFS_MOCK &&
+  !process.env.PINATA_JWT &&
+  !(process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY);
+
+// RFC4648 base32, lowercase, no padding — the alphabet multibase uses for CIDv1.
+const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567';
+const base32Encode = (bytes) => {
+  let bits = 0;
+  let value = 0;
+  let output = '';
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) {
+    output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  }
+  return output;
+};
+
+// Build a real CIDv1 (dag-pb codec, sha2-256 multihash) from the given bytes so
+// even the development placeholder is a parseable CID rather than a random string.
+const computeCid = (data) => {
+  const digest = crypto.createHash('sha256').update(data).digest();
+  const cidBytes = Buffer.concat([Buffer.from([0x01, 0x70, 0x12, 0x20]), digest]);
+  return `b${base32Encode(cidBytes)}`;
+};
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -58,19 +97,29 @@ router.post('/upload-image', upload.single('image'), async (req, res) => {
     const pinataSecretKey = process.env.PINATA_SECRET_KEY;
 
     if (!pinataApiKey || !pinataSecretKey) {
-      // Return mock CID for development
-      const mockCid = `Qm${Math.random().toString(36).substr(2, 44)}`;
+      // No fabricated CID unless development explicitly opts in.
+      if (!isMockEnabled()) {
+        fs.unlinkSync(file.path);
+        return res.status(503).json({
+          success: false,
+          code: 'IPFS_NOT_CONFIGURED',
+          message: 'Pinata is not configured (set PINATA_API_KEY/PINATA_SECRET_KEY). Set IPFS_MOCK=true for local development.'
+        });
+      }
+
+      const mockCid = computeCid(fs.readFileSync(file.path));
       const mockUrl = `https://gateway.pinata.cloud/ipfs/${mockCid}`;
-      
+
       // Clean up temp file
       fs.unlinkSync(file.path);
-      
+
       return res.json({
         success: true,
+        mock: true,
         ipfsHash: mockCid,
         ipfsUrl: mockUrl,
         cid: mockCid,
-        message: 'Mock IPFS upload (Pinata not configured)'
+        message: 'Mock IPFS upload (IPFS_MOCK=true; Pinata not configured)'
       });
     }
 
@@ -190,17 +239,26 @@ router.post('/upload-metadata', async (req, res) => {
     const pinataSecretKey = process.env.PINATA_SECRET_KEY;
 
     if (!pinataApiKey || !pinataSecretKey) {
-      // Return mock CID for development
-      const mockCid = `Qm${Math.random().toString(36).substr(2, 44)}`;
+      // No fabricated CID unless development explicitly opts in.
+      if (!isMockEnabled()) {
+        return res.status(503).json({
+          success: false,
+          code: 'IPFS_NOT_CONFIGURED',
+          message: 'Pinata is not configured (set PINATA_API_KEY/PINATA_SECRET_KEY). Set IPFS_MOCK=true for local development.'
+        });
+      }
+
+      const mockCid = computeCid(JSON.stringify(metadata));
       const mockUrl = `https://gateway.pinata.cloud/ipfs/${mockCid}`;
-      
+
       return res.json({
         success: true,
+        mock: true,
         metadataCid: mockCid,
         metadataUrl: mockUrl,
         metadata: metadata,
         ipfsUri: `ipfs://${mockCid}`,
-        message: 'Mock metadata upload (Pinata not configured)'
+        message: 'Mock metadata upload (IPFS_MOCK=true; Pinata not configured)'
       });
     }
 
