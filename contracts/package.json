@@ -2,10 +2,8 @@
   "name": "space-stellar-contracts",
   "version": "0.1.0",
   "scripts": {
-    "build": "cargo build --target wasm32-unknown-unknown --release",
+    "build": "node init && cargo build --target wasm32-unknown-unknown --release",
     "test": "cargo test",
     "deploy": "echo 'Deploy using Stellar CLI or Scaffold Stellar'"
   }
 }
-
-

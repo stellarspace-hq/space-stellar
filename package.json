@@ -7,9 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"stellar scaffold watch --build-clients\" \"vite\"",
-    "start": "concurrently \"stellar scaffold watch --build-clients\" \"vite\"",
-    "build": "tsc -b && stellar scaffold build && vite build",
+    "dev": "node init && concurrently \"stellar scaffold watch --build-clients\" \"vite\"",
+    "start": "node init && concurrently \"stellar scaffold watch --build-clients\" \"vite\"",
+    "build": "node init && tsc -b && stellar scaffold build && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier . --write",
