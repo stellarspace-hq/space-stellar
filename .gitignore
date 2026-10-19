@@ -23,12 +23,7 @@ contracts/.soroban/
 # ============================================
 # Environment variables (SENSITIVE - DO NOT COMMIT)
 # ============================================
-.env
-.env.local
 .env.*.local
-.env.development
-.env.production
-.env.test
 *.env
 .envrc
 
@@ -60,7 +55,6 @@ $RECYCLE.BIN/
 # ============================================
 # IDE & Editor files
 # ============================================
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -194,3 +188,4 @@ Cargo.lock
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
