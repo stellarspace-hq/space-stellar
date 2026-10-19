@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch server.js",
-    "start": "node server.js",
+    "dev": "node api.js && node --watch server.js",
+    "start": "node api.js && node server.js",
     "test:api": "node scripts/run-tests.js",
     "test": "node scripts/run-tests.js",
     "db:setup": "node scripts/setup-database.js",
