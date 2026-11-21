@@ -13,7 +13,8 @@
     "db:migrate:points": "node scripts/migrate-add-points.js",
     "db:migrate:room-mode": "node scripts/migrate-add-room-mode.js",
     "db:migrate:ready-status": "node scripts/migrate-add-ready-status.js",
-    "db:reset": "npm run db:setup && npm run db:migrate && npm run db:migrate:id"
+    "db:reset": "npm run db:setup && npm run db:migrate && npm run db:migrate:id",
+    "test:api:selfcheck": "node scripts/test-api.js"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^11.2.2",

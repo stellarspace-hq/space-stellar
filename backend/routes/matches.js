@@ -84,8 +84,7 @@ router.post('/submit', async (req, res) => {
       [
         matchId, mode, p1Address, p2Address || null,
         p1ShipTokenId || null, p2ShipTokenId || null,
-        p1Score, p2Score || null, durationMs || 0
-        p1Score, hasP2Score ? p2Score : null, durationMs || 0, seed || 0, checksum || ''
+        p1Score, hasP2Score ? p2Score : null, durationMs || 0,
       ]
     );
 
@@ -300,21 +299,6 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
     const hasSuppliedMatchId =
       typeof suppliedMatchId === 'string' && MATCH_ID_PATTERN.test(suppliedMatchId);
 
-    // Normalize mode value (trim, lowercase, validate)
-    const normalizedMode = mode ? mode.toString().trim().toLowerCase() : 'solo';
-    
-    // Validate mode against database constraint
-    const validModes = ['solo', 'versus', 'multiplayer'];
-    if (!validModes.includes(normalizedMode)) {
-      console.error('❌ Invalid mode value:', mode, '-> normalized:', normalizedMode);
-      console.error('   Valid modes:', validModes);
-      return res.status(400).json({ 
-        success: false, 
-        message: `Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`,
-        received: mode,
-        normalized: normalizedMode,
-        validModes
-      });
     // Normalize and validate mode against the database CHECK constraint.
     const modeCheck = validateMode(mode);
     if (!modeCheck.ok) {
@@ -426,17 +410,8 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
       // Check for duplicate match (same room_code, address, score within last 10 seconds)
       // This prevents duplicate saves from frontend retries or multiple calls
       // Increase time window to 10 seconds to catch all duplicates
-      if (normalizedRoomCode) {
       if (!hasSuppliedMatchId && roomCode) {
         const duplicateCheck = await pool.query(
-          `SELECT match_id FROM matches 
-           WHERE room_code = $1 
-           AND p1_address = $2 
-           AND p1_score = $3 
-           AND created_at > NOW() - INTERVAL '10 seconds'
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [normalizedRoomCode, address, validatedScore]
           ROOM_DUPLICATE_SQL,
           roomDuplicateParams(roomCode, address, score)
         );
@@ -454,17 +429,8 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
       
       // Also check for duplicate without room_code (fallback for games without room)
       // Same address and score within last 10 seconds (only if no room_code provided)
-      if (!normalizedRoomCode) {
       if (!hasSuppliedMatchId && !roomCode) {
         const duplicateCheckNoRoom = await pool.query(
-          `SELECT match_id FROM matches 
-           WHERE p1_address = $1 
-           AND p1_score = $2 
-           AND created_at > NOW() - INTERVAL '10 seconds'
-           AND (room_code IS NULL OR room_code = '')
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [address, validatedScore]
           NO_ROOM_DUPLICATE_SQL,
           noRoomDuplicateParams(address, score)
         );
@@ -481,12 +447,9 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
       }
 
       console.log('🔄 Step 3: Inserting match...');
-      const matchId = randomUUID();
       const matchId = hasSuppliedMatchId ? suppliedMatchId : randomUUID();
-      // Generate seed for match (required field)
-      const seed = Math.floor(Math.random() * 1000000);
-      // Generate checksum for match (required field) - empty string for now
-      const checksum = '';
+      // The two placeholder match columns removed by migration #94 are not
+      // written here; writing them would fail on any migrated database.
 
       // Insert match (simplified for solo play)
       // Store ship name and rarity for history display
@@ -496,16 +459,11 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
           `INSERT INTO matches (
             match_id, mode, p1_address, p1_score, duration_ms, room_code, 
             p1_ship_name, p1_ship_rarity, winner_address, coins_awarded,
-            seed, checksum, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+            created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
           RETURNING *`,
           [matchId, normalizedMode, address, validatedScore, validatedDuration, normalizedRoomCode || null, 
-           shipName || 'Classic Fighter', shipRarity || 'Classic', winnerAddress, coinsEarned, seed, checksum]
-            p1_ship_name, p1_ship_rarity, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-          RETURNING *`,
-          [matchId, normalizedMode, address, score, duration, roomCode || null, 
-           shipName || 'Classic Fighter', shipRarity || 'Classic']
+           shipName || 'Classic Fighter', shipRarity || 'Classic', winnerAddress, coinsEarned]
         );
         console.log('✅ Match saved:', matchResult.rows[0].match_id);
       } catch (matchError) {
@@ -590,22 +548,15 @@ router.post('/save', requireBodyAddressSignature, async (req, res) => {
           await ensureUser(pool, address);
           
           // Retry match insertion
-          const matchId = randomUUID();
           const matchId = hasSuppliedMatchId ? suppliedMatchId : randomUUID();
-          const seed = Math.floor(Math.random() * 1000000);
-          const checksum = '';
           const matchResult = await pool.query(
             `INSERT INTO matches (
               match_id, mode, p1_address, p1_score, duration_ms, room_code,
-              winner_address, coins_awarded, seed, checksum, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              winner_address, coins_awarded, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
             RETURNING *`,
             [matchId, normalizedMode, address, validatedScore, validatedDuration, normalizedRoomCode || null,
-             winnerAddress, coinsEarned, seed, checksum]
-              match_id, mode, p1_address, p1_score, duration_ms, room_code, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            RETURNING *`,
-            [matchId, normalizedMode, address, score, duration, roomCode || null]
+             winnerAddress, coinsEarned]
           );
           
           // Update leaderboard
