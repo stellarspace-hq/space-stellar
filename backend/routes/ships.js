@@ -3,7 +3,6 @@ import axios from 'axios';
 import { pool } from '../server.js';
 import { getShipImage } from '../utils/shipMapping.js';
 import { ensureUser } from '../utils/userId.js';
-import { getShipImage, getShipName } from '../utils/shipRarity.js';
 
 const router = express.Router();
 

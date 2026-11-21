@@ -14,6 +14,12 @@ import gameRoutes from './routes/game.js';
 import multiplayerRoutes from './routes/multiplayer.js';
 import pfpRoutes from './routes/pfp.js';
 import GameStateManager from './game/GameStateManager.js';
+import {
+  createOriginChecker,
+  createOriginGuard,
+  createOriginPolicy,
+  resolveAllowedOrigins,
+} from './utils/corsAllowlist.js';
 
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -25,27 +31,27 @@ dotenv.config({ path: join(__dirname, '.env') });
 
 const app = express();
 const httpServer = createServer(app);
-// CORS configuration - support both local and production
-const allowedOrigins = [
-  "http://localhost:5173", 
-  "http://localhost:5174", 
-  "http://127.0.0.1:5173", 
-  "http://127.0.0.1:5174",
-  process.env.FRONTEND_URL,
-  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null
-].filter(Boolean);
+// CORS configuration. The allowlist is resolved from the environment (see
+// utils/corsAllowlist.js) and enforced identically for HTTP and Socket.IO.
+// There is deliberately no production wildcard: an unknown origin is rejected.
+const corsOrigin = createOriginChecker(process.env);
+// A WebSocket upgrade does not need CORS headers, so the origin has to be
+// refused server-side too; otherwise a rogue page could open a handshake.
+const corsAllowed = createOriginPolicy(process.env);
+
+if (process.env.NODE_ENV === 'production') {
+  const origins = resolveAllowedOrigins(process.env);
+  console.log(
+    origins.size > 0
+      ? `[cors] production allowlist: ${[...origins].join(', ')}`
+      : '[cors] production allowlist is EMPTY - all cross-origin requests will be rejected'
+  );
+}
 
 const io = new Server(httpServer, {
+  allowRequest: (req, callback) => callback(null, corsAllowed(req.headers.origin)),
   cors: {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'production') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: corsOrigin,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
     allowedHeaders: ["*"]
@@ -60,15 +66,9 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 3001;
 
 // Middleware - CORS with production support
+app.use(createOriginGuard(process.env));
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'production') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: corsOrigin,
   credentials: true
 }));
 app.use(express.json());

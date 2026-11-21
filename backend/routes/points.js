@@ -70,7 +70,6 @@ router.get('/:address', async (req, res) => {
       rawPoints === null || rawPoints === undefined || !Number.isFinite(parsedPoints)
         ? 2000
         : parsedPoints;
-    const points = parseStoredPoints(result.rows[0].points);
 
     res.json({
       success: true,
@@ -87,39 +86,19 @@ router.get('/:address', async (req, res) => {
 });
 
 // Deduct points (untuk mint NFT atau belanja)
+//
+// Authenticated and atomic: the balance check and the decrement happen in one
+// `UPDATE ... WHERE points >= $1`, so two concurrent deducts cannot both pass a
+// pre-spend check and overdraw the account. A stored balance of 0 is respected
+// (see #213); `users.points CHECK (points >= 0)` stays the final backstop.
 router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (req, res) => {
   try {
     const { address, amount, reason } = req.body;
 
-    if (!address || amount === undefined || amount === null) {
-      return res.status(400).json({
-        success: false,
-        message: 'Address and amount required'
-      });
-    }
-
-    const deductAmount = Number(amount);
-    if (!Number.isFinite(deductAmount) || !Number.isInteger(deductAmount) || deductAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Amount must be a positive integer'
-    const numericAmount = Number(amount);
-    if (!address || amount === undefined || amount === null) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Address and amount required' 
-      });
-    }
-
-    if (!Number.isInteger(numericAmount) || numericAmount <= 0 || numericAmount > 1000000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Amount must be a positive integer no greater than 1000000' 
-      });
     if (!address) {
       return res.status(400).json({
         success: false,
-        message: 'Address and amount required'
+        message: 'Address required'
       });
     }
 
@@ -136,128 +115,57 @@ router.post('/deduct', requireBodyAddressSignature, pointsWriteLimiter, async (r
       });
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Ensure the user exists (with the welcome bonus) before mutating the
-      // balance. `ON CONFLICT (address) DO NOTHING` keeps concurrent first-time
-      // deducts from racing on the unique address.
-      const nextId = await getNextUserId();
-      await client.query(
-        `INSERT INTO users (id, address, user_id, points, created_at) 
-         VALUES ($1, $2, $3, 2000, NOW())
-         ON CONFLICT (address) DO NOTHING`,
-        [nextId, address, `USER-${nextId}`]
-    let currentPoints = 2000; // Welcome bonus points
-    if (userCheck.rows.length === 0) {
-      // Create user dengan welcome bonus 2000 points
-      const nextId = await getNextUserId(pool);
-      await pool.query(
-        `INSERT INTO users (id, address, user_id, points, created_at) 
-         VALUES ($1, $2, $3, 2000, NOW())`,
-        [nextId, address, formatUserId(nextId)]
-      );
-
-      // Atomic check-and-decrement. Reading the balance and then updating it in a
-      // separate statement lets two concurrent deducts both pass a pre-spend check
-      // and overdraw the account; a single `UPDATE ... WHERE points >= $1` makes
-      // the check and the decrement one indivisible step. Zero rows means the user
-      // is missing or the balance is too low. The `users.points`
-      // `CHECK (points >= 0)` constraint remains the final backstop.
-      const result = await client.query(
-        `UPDATE users 
-         SET points = points - $1,
-             updated_at = NOW()
-         WHERE address = $2
-           AND points >= $1
-         RETURNING points`,
-        [deductAmount, address]
-      );
-      console.log(`✅ New user created with welcome bonus: 2000 points`);
-    } else {
-      currentPoints = parseStoredPoints(userCheck.rows[0].points);
-    }
-
-    // Check if user has enough points
-    if (currentPoints < numericAmount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient points',
-        currentPoints,
-        required: numericAmount,
-        shortage: numericAmount - currentPoints
-      });
-    const deduction = evaluateDeduction(currentPoints, amountValue);
-    if (!deduction.ok) {
-      return res.status(deduction.status).json(deduction.body);
-    }
-
-    // Deduct points
-    const result = await pool.query(
-      `UPDATE users 
-       SET points = points - $1,
-           updated_at = NOW()
-       WHERE address = $2
-       RETURNING points`,
-      [numericAmount, address]
-      DEDUCT_POINTS_SQL,
-      ledgerParams(amountValue, address)
+    // Ensure the user exists (with the welcome bonus) before mutating the
+    // balance. `ON CONFLICT (address) DO NOTHING` keeps concurrent first-time
+    // deducts from racing on the unique address.
+    const nextId = await getNextUserId(pool);
+    await pool.query(
+      `INSERT INTO users (id, address, user_id, points, created_at) 
+       VALUES ($1, $2, $3, 2000, NOW())
+       ON CONFLICT (address) DO NOTHING`,
+      [nextId, address, formatUserId(nextId)]
     );
 
-      if (result.rows.length === 0) {
-        const balanceResult = await client.query(
-          'SELECT points FROM users WHERE address = $1',
-          [address]
-        );
-        await client.query('ROLLBACK');
+    const deductAmount = amountValue;
+    const result = await pool.query(
+      DEDUCT_POINTS_SQL,
+      ledgerParams(deductAmount, address)
+    );
 
-        if (balanceResult.rows.length === 0) {
-          return res.status(404).json({
-            success: false,
-            message: 'User not found'
-          });
-        }
+    // Zero rows means the user is missing or the balance is too low; the
+    // statement above always leaves points >= 0, so re-read to report it.
+    if (result.rows.length === 0) {
+      const balanceResult = await pool.query(
+        'SELECT points FROM users WHERE address = $1',
+        [address]
+      );
 
-        const currentPoints = parseInt(balanceResult.rows[0].points) || 0;
-        return res.status(400).json({
+      if (balanceResult.rows.length === 0) {
+        return res.status(404).json({
           success: false,
-          message: 'Insufficient points',
-          currentPoints,
-          required: deductAmount,
-          shortage: deductAmount - currentPoints
+          message: 'User not found'
         });
       }
 
-      await client.query('COMMIT');
-
-      const newPoints = parseInt(result.rows[0].points);
-
-      res.json({
-        success: true,
-        points: newPoints,
-        deducted: deductAmount,
-        reason: reason || 'Mint NFT',
-        message: `Successfully deducted ${deductAmount} points`
-      });
-    } catch (txError) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw txError;
-    } finally {
-      client.release();
+      const currentPoints = parseStoredPoints(balanceResult.rows[0].points);
+      const deduction = evaluateDeduction(currentPoints, deductAmount);
+      return res
+        .status(deduction.ok ? 400 : deduction.status)
+        .json(
+          deduction.ok
+            ? { success: false, message: 'Insufficient points', currentPoints, required: deductAmount, shortage: deductAmount - currentPoints }
+            : deduction.body
+        );
     }
 
-    const newPoints = parseInt(result.rows[0].points);
+    const newPoints = parseStoredPoints(result.rows[0].points);
 
     res.json({
       success: true,
       points: newPoints,
-      deducted: numericAmount,
+      deducted: deductAmount,
       reason: reason || 'Mint NFT',
-      message: `Successfully deducted ${numericAmount} points`
-      deducted: amountValue,
-      reason: reason || 'Mint NFT',
-      message: `Successfully deducted ${amountValue} points`
+      message: `Successfully deducted ${deductAmount} points`
     });
   } catch (error) {
     console.error('Error deducting points:', error);
@@ -291,17 +199,13 @@ router.post('/add', requireBodyAddressSignature, pointsWriteLimiter, async (req,
         success: false, 
         message: 'Database not available' 
       });
-      return res.status(400).json({
-        success: false,
-        message: 'Address and amount required'
-      });
     }
 
     const amountCheck = validateAmount(amount);
     if (!amountCheck.ok) {
       return res.status(amountCheck.status).json(amountCheck.body);
     }
-    const amountValue = amountCheck.amount;
+    let amountValue = amountCheck.amount;
 
     // A match/game reward must be backed by a stored match; the amount comes
     // from that record, never from the request body.
@@ -330,14 +234,14 @@ router.post('/add', requireBodyAddressSignature, pointsWriteLimiter, async (req,
         });
       }
 
-      amount = deriveMatchReward(match); // ignore req.body.amount for match rewards
-      if (amount <= 0) {
+      amountValue = deriveMatchReward(match); // ignore req.body.amount for match rewards
+      if (amountValue <= 0) {
         return res.status(400).json({
           success: false,
           message: 'Match has no creditable reward'
         });
       }
-    } else if (!Number.isInteger(amount) || amount <= 0 || amount > 100000) {
+    } else if (!Number.isInteger(amountValue) || amountValue <= 0 || amountValue > 100000) {
       return res.status(400).json({ 
         success: false, 
         message: 'Amount must be a positive integer no greater than 100000' 
@@ -379,7 +283,6 @@ router.post('/add', requireBodyAddressSignature, pointsWriteLimiter, async (req,
     res.json({
       success: true,
       points: newPoints,
-      added: amount,
       matchId: matchId || null,
       added: amountValue,
       reason: reason || 'Reward',

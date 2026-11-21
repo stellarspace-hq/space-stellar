@@ -1,21 +1,10 @@
 import express from 'express';
 import { pool } from '../server.js';
 import { randomUUID } from 'crypto';
-import { generateUserId, resolveNextUserId } from '../utils/userIds.js';
+import { formatUserId, getNextUserId } from '../utils/userId.js';
 import { requireSignedAddress, authPayload } from '../utils/auth.js';
 
 const router = express.Router();
-
-// Get next sequential user ID from database
-// ID starts from 243681 and auto-increments
-const getNextUserId = async () => {
-  try {
-    return await resolveNextUserId(pool);
-  } catch (error) {
-    console.warn('Could not resolve next user ID, using fallback:', error.message);
-    return 243681;
-  }
-};
 
 // A profile write must prove control of the address in the path, so a visitor
 // cannot edit another player's public profile.
@@ -67,10 +56,6 @@ const validateProfileFields = ({ username, email, bio, avatarUrl }) => {
   return { error: null };
 };
 
-import { getNextUserId, formatUserId } from '../utils/userId.js';
-
-const router = express.Router();
-
 // Get or create user profile
 router.get('/profile/:address', async (req, res) => {
   try {
@@ -107,7 +92,6 @@ router.get('/profile/:address', async (req, res) => {
         `INSERT INTO users (id, address, user_id, points, created_at) 
          VALUES ($1, $2, $3, 2000, NOW()) 
          RETURNING *`,
-        [nextId, address, generateUserId(nextId)]
         [nextId, address, formatUserId(nextId)]
       );
       user = insertResult.rows[0];

@@ -177,6 +177,8 @@ const migrate = async () => {
       ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_p2_address_fkey;
       ALTER TABLE matches ADD CONSTRAINT matches_p2_address_fkey
         FOREIGN KEY (p2_address) REFERENCES users(address) ON DELETE SET NULL;
+    `);
+
     // issue #94: seed/checksum only ever stored placeholders and nothing read
     // them, so drop them (idempotent for existing databases).
     await pool.query(`

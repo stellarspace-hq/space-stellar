@@ -108,6 +108,8 @@ describe('POST /upload-metadata handler', () => {
   beforeEach(() => {
     delete process.env.PINATA_API_KEY;
     delete process.env.PINATA_SECRET_KEY;
+    delete process.env.PINATA_JWT;
+    delete process.env.IPFS_MOCK;
     uploads = 0;
     axios.post = async () => {
       uploads += 1;
@@ -115,13 +117,27 @@ describe('POST /upload-metadata handler', () => {
     };
   });
 
-  it('returns the assembled metadata without attempting an upload', async () => {
+  it('refuses to fabricate a CID when Pinata is unconfigured and mock is off', async () => {
     const router = (await import('../routes/ipfs.js')).default;
+    const res = await callRouter(router, 'POST', '/upload-metadata', FIXTURE);
+
+    assert.equal(res.statusCode, 503);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.code, 'IPFS_NOT_CONFIGURED');
+    assert.equal(uploads, 0);
+  });
+
+  it('returns assembled metadata under an explicit development mock without uploading', async () => {
+    process.env.IPFS_MOCK = 'true';
+
+    // IPFS_MOCK is captured at module load, so import a fresh instance.
+    const router = (await import('../routes/ipfs.js?mock=1')).default;
     const res = await callRouter(router, 'POST', '/upload-metadata', FIXTURE);
 
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.success, true);
     assert.equal(res.body.metadata.name, FIXTURE.name);
+    assert.match(res.body.ipfsUri, /^ipfs:\/\/[a-z2-7]+$/);
     assert.equal(uploads, 0);
   });
 

@@ -92,8 +92,6 @@ export const runMigrations = async (db = pool) => {
       CREATE INDEX IF NOT EXISTS idx_matches_mode ON matches(mode);
         `);
       }
-      const matchesTableCheck = await pool.query(`
-      // issue #94: drop the placeholder seed/checksum columns if present.
       const matchesCheck = await pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -101,7 +99,7 @@ export const runMigrations = async (db = pool) => {
           AND table_name = 'matches'
         );
       `);
-      if (matchesTableCheck.rows[0].exists) {
+      if (matchesCheck.rows[0].exists) {
         await pool.query(`
           ALTER TABLE matches DROP CONSTRAINT IF EXISTS matches_p1_address_fkey;
           ALTER TABLE matches ADD CONSTRAINT matches_p1_address_fkey
@@ -112,7 +110,8 @@ export const runMigrations = async (db = pool) => {
         `);
         await pool.query(`
           CREATE INDEX IF NOT EXISTS idx_matches_mode ON matches(mode);
-      if (matchesCheck.rows[0].exists) {
+        `);
+        // issue #94: drop the placeholder seed/checksum columns if present.
         await pool.query(`
           ALTER TABLE matches DROP COLUMN IF EXISTS seed;
           ALTER TABLE matches DROP COLUMN IF EXISTS checksum;
