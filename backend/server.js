@@ -14,6 +14,12 @@ import gameRoutes from './routes/game.js';
 import multiplayerRoutes from './routes/multiplayer.js';
 import pfpRoutes from './routes/pfp.js';
 import GameStateManager from './game/GameStateManager.js';
+import {
+  ALLOWLIST_ENV,
+  buildAllowedOrigins,
+  isOriginAllowed,
+  rejectionReason,
+} from './utils/corsAllowlist.js';
 
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -25,27 +31,30 @@ dotenv.config({ path: join(__dirname, '.env') });
 
 const app = express();
 const httpServer = createServer(app);
-// CORS configuration - support both local and production
-const allowedOrigins = [
-  "http://localhost:5173", 
-  "http://localhost:5174", 
-  "http://127.0.0.1:5173", 
-  "http://127.0.0.1:5174",
-  process.env.FRONTEND_URL,
-  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null
-].filter(Boolean);
+// CORS configuration - explicit allowlist only (#66).
+// Origins come from CORS_ALLOWLIST (comma separated), FRONTEND_URL and
+// VERCEL_URL; the Vite dev ports are added outside production. There is no
+// production wildcard: an origin either matches this set or is rejected.
+const allowedOrigins = buildAllowedOrigins(process.env);
+if (process.env.NODE_ENV === 'production' && allowedOrigins.size === 0) {
+  console.error(
+    `No CORS origins configured in production. Set ${ALLOWLIST_ENV} to the frontend origin(s).`
+  );
+}
+
+function corsOriginCallback(origin, callback) {
+  if (isOriginAllowed(origin, allowedOrigins)) {
+    return callback(null, true);
+  }
+  console.warn(`CORS rejection: ${rejectionReason(origin)}`);
+  return callback(new Error('Not allowed by CORS'));
+}
 
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'production') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    // Requests with no Origin (curl, mobile apps) are allowed; browser
+    // origins must be on the allowlist and are checked like REST calls.
+    origin: corsOriginCallback,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
     allowedHeaders: ["*"]
@@ -59,16 +68,9 @@ const io = new Server(httpServer, {
 });
 const PORT = process.env.PORT || 3001;
 
-// Middleware - CORS with production support
+// Middleware - CORS with the explicit allowlist above
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'production') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: corsOriginCallback,
   credentials: true
 }));
 app.use(express.json());
